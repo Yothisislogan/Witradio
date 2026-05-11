@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# Relay the configured station's local Icecast stream to YouTube RTMP.
+#
+# Required:
+#   YOUTUBE_STREAM_KEY=... bash mac/youtube_relay.sh
+# or:
+#   YOUTUBE_RTMP_URL=rtmp://x.rtmp.youtube.com/live2/... bash mac/youtube_relay.sh
+
+set -euo pipefail
+
+PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$PROJECT_ROOT"
+
+eval "$(uv run python mac/station_config.py --env)"
+
+YOUTUBE_RTMP_BASE="${YOUTUBE_RTMP_BASE:-rtmp://x.rtmp.youtube.com/live2}"
+YOUTUBE_AUDIO_URL="${YOUTUBE_AUDIO_URL:-http://${WRIT_ICECAST_HOST}:${WRIT_ICECAST_PORT}${WRIT_ICECAST_MOUNT}}"
+YOUTUBE_AUDIO_HEALTH_URL="${YOUTUBE_AUDIO_HEALTH_URL:-${ICECAST_STATUS_URL}}"
+YOUTUBE_VIDEO_SOURCE="${YOUTUBE_VIDEO_SOURCE:-color=c=0x101318:s=1280x720:r=30}"
+YOUTUBE_VIDEO_BITRATE="${YOUTUBE_VIDEO_BITRATE:-2500k}"
+YOUTUBE_AUDIO_BITRATE="${YOUTUBE_AUDIO_BITRATE:-160k}"
+YOUTUBE_SAMPLE_RATE="${YOUTUBE_SAMPLE_RATE:-44100}"
+YOUTUBE_FPS="${YOUTUBE_FPS:-30}"
+YOUTUBE_GOP="${YOUTUBE_GOP:-60}"
+
+if [[ -z "${YOUTUBE_RTMP_URL:-}" ]]; then
+    if [[ -z "${YOUTUBE_STREAM_KEY:-}" ]]; then
+        echo "YOUTUBE_STREAM_KEY or YOUTUBE_RTMP_URL is required" >&2
+        exit 2
+    fi
+    YOUTUBE_RTMP_URL="${YOUTUBE_RTMP_BASE%/}/${YOUTUBE_STREAM_KEY}"
+fi
+
+if ! curl -sf --max-time 5 "$YOUTUBE_AUDIO_HEALTH_URL" >/dev/null; then
+    echo "Local Icecast health endpoint is not reachable: $YOUTUBE_AUDIO_HEALTH_URL" >&2
+    exit 1
+fi
+
+if ! ffprobe -hide_banner -loglevel error "$YOUTUBE_AUDIO_URL" >/dev/null; then
+    echo "Local station audio is not reachable: $YOUTUBE_AUDIO_URL" >&2
+    exit 1
+fi
+
+echo "Relaying ${WRIT_CALL_SIGN} ${WRIT_ICECAST_MOUNT} -> YouTube RTMP"
+echo "Audio: $YOUTUBE_AUDIO_URL"
+echo "Video: generated ${YOUTUBE_FPS}fps slate, ${YOUTUBE_VIDEO_BITRATE}; audio ${YOUTUBE_AUDIO_BITRATE}"
+
+exec ffmpeg -hide_banner -loglevel info -nostdin -stats_period 15 \
+    -f lavfi -re -i "$YOUTUBE_VIDEO_SOURCE" \
+    -thread_queue_size 4096 \
+    -reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 \
+    -re -i "$YOUTUBE_AUDIO_URL" \
+    -map 0:v:0 -map 1:a:0 \
+    -c:v libx264 -preset veryfast -tune stillimage \
+    -pix_fmt yuv420p -r "$YOUTUBE_FPS" -g "$YOUTUBE_GOP" \
+    -b:v "$YOUTUBE_VIDEO_BITRATE" -maxrate "$YOUTUBE_VIDEO_BITRATE" -bufsize 5000k \
+    -c:a aac -b:a "$YOUTUBE_AUDIO_BITRATE" -ar "$YOUTUBE_SAMPLE_RATE" -ac 2 \
+    -f flv "$YOUTUBE_RTMP_URL"

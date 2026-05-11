@@ -34,6 +34,7 @@ WRIT-FM is a music-forward internet radio station where:
 ├──────────────────────────────────────────────────────────────┤
 │  Icecast :8000 ──► /stream /klod-fm /cdex-fm                 │
 │  APIs ───► /now-playing /schedule /health /messages          │
+│  relays ─► Caster.fm / YouTube RTMP                          │
 ├──────────────────────────────────────────────────────────────┤
 │  content_generator/                                          │
 │    ├── talk_generator.py        (Claude CLI + Kokoro TTS)    │
@@ -97,6 +98,7 @@ Start individual components:
 ./writ start tunnel   # Cloudflared tunnel
 ./writ start content  # music-gen, operator, listener
 ./writ start operator # Claude Code maintenance loop
+./writ start youtube  # Relay selected station to YouTube RTMP
 ```
 
 Run a specific station instance:
@@ -106,6 +108,13 @@ Run a specific station instance:
 ./writ --station cdex-fm start stream   # CDEX-FM on /cdex-fm, API :8012
 ./writ start stations                   # Start KLOD-FM and CDEX-FM streams
 ./writ status all                       # Show all configured stations
+```
+
+Relay a station to YouTube without committing the stream key:
+```bash
+YOUTUBE_STREAM_KEY=... ./writ --station klod-fm start youtube
+# or provide the full endpoint:
+YOUTUBE_RTMP_URL=rtmp://x.rtmp.youtube.com/live2/... ./writ --station klod-fm start youtube
 ```
 
 The listener endpoints are the Icecast mounts:

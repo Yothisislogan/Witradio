@@ -15,7 +15,7 @@
 #   Core (default):  icecast, stream, tunnel
 #   Public API:      api
 #   Content:         music-gen, operator, listener
-#   Relays:          caster
+#   Relays:          caster, youtube
 #   Groups:          core, content, all
 # ──────────────────────────────────────────────────────────────
 if (( BASH_VERSINFO[0] < 4 )); then
@@ -55,30 +55,31 @@ SESSION="writ"
 CORE_COMPONENTS=(icecast stream tunnel)
 API_COMPONENTS=(api)
 CONTENT_COMPONENTS=(music-gen operator listener)
-RELAY_COMPONENTS=(caster)
+RELAY_COMPONENTS=(caster youtube)
 ALL_COMPONENTS=("${CORE_COMPONENTS[@]}" "${API_COMPONENTS[@]}" "${CONTENT_COMPONENTS[@]}" "${RELAY_COMPONENTS[@]}")
 
 declare -A COMP_PORT=(
-    [icecast]=8000 [stream]="$STATION_API_PORT" [tunnel]="" [api]="$PUBLIC_API_PORT" [caster]=""
+    [icecast]=8000 [stream]="$STATION_API_PORT" [tunnel]="" [api]="$PUBLIC_API_PORT" [caster]="" [youtube]=""
     [music-gen]=4009 [operator]="" [listener]=""
 )
 declare -A COMP_HEALTH_URL=(
     [icecast]="http://localhost:8000/status-json.xsl"
     [stream]="http://localhost:${STATION_API_PORT}/now-playing" [tunnel]=""
     [api]="http://localhost:${PUBLIC_API_PORT}/health"
-    [caster]=""
+    [caster]="" [youtube]=""
     [music-gen]="http://localhost:4009/health" [operator]="" [listener]=""
 )
 declare -A COMP_PGREP=(
     [icecast]="icecast" [stream]="feeder.py"
     [tunnel]="cloudflared.*wvoid" [api]="mac/api_server.py"
     [caster]="mac/caster_relay.sh|ffmpeg.*sapircast.caster.fm.*wt6w8"
+    [youtube]="mac/youtube_relay.sh|ffmpeg.*youtube.com/live2"
     [music-gen]="music.gen"
     [operator]="operator_daemon" [listener]="listener_daemon"
 )
 declare -A COMP_WAIT=(
     [icecast]=30 [stream]=10 [tunnel]=10 [api]=10
-    [caster]=10 [music-gen]=180 [operator]=10 [listener]=10
+    [caster]=10 [youtube]=10 [music-gen]=180 [operator]=10 [listener]=10
 )
 
 # ── Colors ───────────────────────────────────────────────────
@@ -111,7 +112,7 @@ window_exists() {
 send_cmd() { local w="$1"; shift; tmux send-keys -t "$SESSION:$w" "$*" Enter; }
 
 is_station_scoped() {
-    case "$1" in stream|operator|listener) return 0 ;; *) return 1 ;; esac
+    case "$1" in stream|operator|listener|youtube) return 0 ;; *) return 1 ;; esac
 }
 
 component_window() {
@@ -195,6 +196,7 @@ get_start_cmd() {
         tunnel)    echo "cloudflared tunnel run wvoid-radio" ;;
         api)       echo "cd '$PROJECT_ROOT' && WRIT_STATION_ID='$PUBLIC_API_STATION_ID' uv run python mac/api_server.py" ;;
         caster)    echo "cd '$PROJECT_ROOT' && bash mac/caster_relay.sh" ;;
+        youtube)   echo "cd '$PROJECT_ROOT' && WRIT_STATION_ID='$STATION_ID' bash mac/youtube_relay.sh" ;;
         music-gen)
             [[ -z "$MUSIC_GEN_DIR" || ! -d "$MUSIC_GEN_DIR" ]] && \
                 { err "music-gen.server not found. Set MUSIC_GEN_DIR."; return 1; }
@@ -240,6 +242,7 @@ start_one() {
     case "$comp" in
         stream)  is_healthy icecast   || { err "start icecast first"; return 1; } ;;
         caster)  is_healthy icecast   || { err "start icecast first"; return 1; } ;;
+        youtube) is_healthy stream    || { err "start stream first"; return 1; } ;;
         operator) is_healthy music-gen || warn "music-gen is down; operator can still manage talk/messages" ;;
     esac
 
@@ -263,6 +266,21 @@ start_one() {
         set_tmux_env_if_present CASTER_STREAM_NAME
         set_tmux_env_if_present CASTER_STREAM_GENRE
         set_tmux_env_if_present CASTER_STREAM_DESCRIPTION
+        window_exists "$win" && tmux kill-window -t "$SESSION:$win" 2>/dev/null || true
+    fi
+    if [[ "$comp" == "youtube" ]]; then
+        ensure_session
+        set_tmux_env_if_present YOUTUBE_STREAM_KEY
+        set_tmux_env_if_present YOUTUBE_RTMP_URL
+        set_tmux_env_if_present YOUTUBE_RTMP_BASE
+        set_tmux_env_if_present YOUTUBE_AUDIO_URL
+        set_tmux_env_if_present YOUTUBE_AUDIO_HEALTH_URL
+        set_tmux_env_if_present YOUTUBE_VIDEO_SOURCE
+        set_tmux_env_if_present YOUTUBE_VIDEO_BITRATE
+        set_tmux_env_if_present YOUTUBE_AUDIO_BITRATE
+        set_tmux_env_if_present YOUTUBE_SAMPLE_RATE
+        set_tmux_env_if_present YOUTUBE_FPS
+        set_tmux_env_if_present YOUTUBE_GOP
         window_exists "$win" && tmux kill-window -t "$SESSION:$win" 2>/dev/null || true
     fi
 
@@ -348,7 +366,7 @@ cmd_stop() {
     case "$target" in
         ""|all)
             log "Stopping all..."
-            for c in caster listener operator music-gen tunnel stream api icecast; do stop_one "$c"; done
+            for c in youtube caster listener operator music-gen tunnel stream api icecast; do stop_one "$c"; done
             local n; n=$(tmux list-windows -t "$SESSION" 2>/dev/null | wc -l | tr -d ' ')
             (( n <= 1 )) && { tmux kill-session -t "$SESSION" 2>/dev/null || true; } ;;
         core)    for c in tunnel stream icecast; do stop_one "$c"; done ;;
@@ -462,7 +480,7 @@ cmd_help() {
   writ generate <talk|music>  Generate content (foreground)
 
   Select station:  writ --station klod-fm start stream
-  Components:      icecast  stream  tunnel  api  caster  music-gen  operator  listener
+  Components:      icecast  stream  tunnel  api  caster  youtube  music-gen  operator  listener
   Groups:          core  content  all  stations
 
 EOF
