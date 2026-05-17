@@ -34,7 +34,7 @@ WRIT-FM is a music-forward internet radio station where:
 ├──────────────────────────────────────────────────────────────┤
 │  Icecast :8000 ──► /stream /klod-fm /cdex-fm                 │
 │  APIs ───► /now-playing /schedule /health /messages          │
-│  relays ─► Caster.fm / YouTube RTMP                          │
+│  relays ─► YouTube RTMP                                      │
 ├──────────────────────────────────────────────────────────────┤
 │  content_generator/                                          │
 │    ├── talk_generator.py        (Claude CLI + Kokoro TTS)    │
