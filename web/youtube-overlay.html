@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WIT Radio Overlay</title>
+<style>
+body{
+margin:0;
+background:transparent;
+font-family:Arial,sans-serif;
+color:white;
+overflow:hidden;
+}
+.overlay{
+position:absolute;
+bottom:30px;
+left:30px;
+background:rgba(0,0,0,.65);
+border:2px solid #00AEEF;
+border-radius:18px;
+padding:20px;
+min-width:420px;
+}
+.station{
+font-size:28px;
+font-weight:700;
+color:#00AEEF;
+}
+.track{
+font-size:24px;
+margin-top:10px;
+}
+.meta{
+opacity:.8;
+margin-top:6px;
+}
+</style>
+</head>
+<body>
+<div class="overlay">
+<div class="station">WIT RADIO</div>
+<div class="track" id="track">Loading...</div>
+<div class="meta" id="meta"></div>
+</div>
+
+<script>
+async function refresh(){
+  try{
+    const res = await fetch('http://localhost:8787/now-playing');
+    const data = await res.json();
+
+    document.getElementById('track').innerText = data.track || 'Unknown Track';
+    document.getElementById('meta').innerText = `${data.artist || 'Unknown'} • ${data.show || ''}`;
+  }catch(e){
+    console.log(e);
+  }
+}
+
+refresh();
+setInterval(refresh, 5000);
+</script>
+</body>
+</html>
