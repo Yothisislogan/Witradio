@@ -1,0 +1,18 @@
+<ezstream>
+  <url>http://localhost:8000/witradio</url>
+  <sourcepassword>changeme</sourcepassword>
+  <format>VORBIS</format>
+
+  <filename>runtime/current_playlist.m3u</filename>
+
+  <stream_once>0</stream_once>
+  <svrinfoname>WIT Radio</svrinfoname>
+  <svrinfourl>https://weinsurethings.com</svrinfourl>
+  <svrinfogenre>AI Radio</svrinfogenre>
+  <svrinfodescription>AI-powered internet radio from We Insure Things</svrinfodescription>
+
+  <reconnect_attempts>100</reconnect_attempts>
+  <reconnect_timeout>5</reconnect_timeout>
+
+  <shuffle>1</shuffle>
+</ezstream>
