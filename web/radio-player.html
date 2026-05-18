@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WIT Radio</title>
+<style>
+body {
+  margin:0;
+  background:#071018;
+  color:white;
+  font-family:Arial,sans-serif;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  min-height:100vh;
+}
+.card {
+  background:#101c28;
+  border:2px solid #00AEEF;
+  border-radius:18px;
+  padding:32px;
+  width:90%;
+  max-width:480px;
+  text-align:center;
+}
+.logo {
+  font-size:38px;
+  font-weight:700;
+  color:#00AEEF;
+}
+.tagline {
+  opacity:.8;
+  margin-top:10px;
+  margin-bottom:24px;
+}
+audio {
+  width:100%;
+}
+.showbox {
+  margin-top:24px;
+  background:#0b141d;
+  padding:18px;
+  border-radius:12px;
+}
+</style>
+</head>
+<body>
+<div class="card">
+<div class="logo">WIT RADIO</div>
+<div class="tagline">AI-Powered Internet Radio</div>
+
+<audio controls autoplay>
+  <source src="http://localhost:8000/witradio" type="audio/ogg">
+</audio>
+
+<div class="showbox">
+<strong>Current Format</strong><br><br>
+6AM–9AM • Morning Acoustic<br>
+9AM–8PM • The Day Shift<br>
+8PM–12AM • Dance Party<br>
+12AM–6AM • The Night Shift
+</div>
+</div>
+</body>
+</html>
