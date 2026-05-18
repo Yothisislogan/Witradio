@@ -1,0 +1,45 @@
+# WIT Radio music prompt pools for ACE-Step or other AI music generators.
+# Use these prompts to generate show-specific music libraries.
+
+morning_acoustic:
+  show_name: "Morning Acoustic"
+  mood: "calm, warm, optimistic, coffeehouse, sunrise"
+  prompts:
+    - "warm acoustic guitar, soft folk-pop groove, sunrise coffeehouse mood, gentle percussion, hopeful melody"
+    - "mellow indie acoustic track, hand percussion, light piano, calm morning energy, clean mix"
+    - "coffeehouse folk song, fingerpicked guitar, warm bass, soft drums, peaceful start to the day"
+    - "acoustic pop instrumental, bright chorus feel, relaxed tempo, friendly morning radio vibe"
+    - "folk-inspired sunrise music, mandolin accents, brushed drums, warm organic production"
+
+
+day_shift:
+  show_name: "The Day Shift"
+  mood: "upbeat, productive, friendly, modern, office-safe"
+  prompts:
+    - "upbeat indie pop instrumental, bright guitars, modern drums, feel-good workday energy"
+    - "office-friendly electronic pop, clean synths, steady beat, optimistic and polished"
+    - "modern alt-pop groove, catchy melody, light electronic textures, productive daytime feel"
+    - "sunny pop rock instrumental, driving drums, positive mood, radio-ready arrangement"
+    - "feel-good daytime track, indie dance rhythm, bright bassline, motivational but not aggressive"
+
+
+dance_party:
+  show_name: "Dance Party"
+  mood: "high-energy, fun, club, weekend, neon"
+  prompts:
+    - "festival EDM instrumental, strong build, energetic drop, bright synth lead, clean club mix"
+    - "dance pop anthem, four-on-the-floor beat, big chorus energy, late-night party vibe"
+    - "Brazilian phonk inspired dance track, heavy bass, fast rhythm, neon street energy"
+    - "house music groove, deep bassline, piano stabs, crowd-ready night club feel"
+    - "electro pop dance instrumental, pulsing synths, energetic drums, fun radio party mood"
+
+
+night_shift:
+  show_name: "The Night Shift"
+  mood: "late-night, chill, atmospheric, reflective, smooth"
+  prompts:
+    - "late-night lo-fi instrumental, warm vinyl texture, soft keys, relaxed hip-hop drums"
+    - "dark synthwave night drive, analog synth bass, neon atmosphere, steady mid-tempo groove"
+    - "ambient electronic dreamscape, soft pads, subtle pulse, midnight radio atmosphere"
+    - "chill downtempo instrumental, deep sub bass, rain ambience, reflective late-night mood"
+    - "smooth nocturnal electronic track, sparse drums, dreamy synths, calm overnight energy"
