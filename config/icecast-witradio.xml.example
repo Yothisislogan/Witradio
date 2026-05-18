@@ -1,0 +1,48 @@
+<icecast>
+  <location>United States</location>
+  <admin>admin@weinsurethings.com</admin>
+
+  <limits>
+    <clients>100</clients>
+    <sources>4</sources>
+    <queue-size>524288</queue-size>
+    <client-timeout>30</client-timeout>
+    <header-timeout>15</header-timeout>
+    <source-timeout>10</source-timeout>
+  </limits>
+
+  <authentication>
+    <source-password>changeme</source-password>
+    <relay-password>changeme</relay-password>
+    <admin-user>admin</admin-user>
+    <admin-password>changeme</admin-password>
+  </authentication>
+
+  <hostname>localhost</hostname>
+  <listen-socket>
+    <port>8000</port>
+  </listen-socket>
+
+  <mount>
+    <mount-name>/witradio</mount-name>
+    <public>1</public>
+    <stream-name>WIT Radio</stream-name>
+    <stream-description>AI-powered radio from We Insure Things</stream-description>
+    <genre>AI Radio</genre>
+  </mount>
+
+  <fileserve>1</fileserve>
+
+  <paths>
+    <basedir>/opt/homebrew/share/icecast</basedir>
+    <logdir>/opt/homebrew/var/log/icecast</logdir>
+    <webroot>/opt/homebrew/share/icecast/web</webroot>
+    <adminroot>/opt/homebrew/share/icecast/admin</adminroot>
+  </paths>
+
+  <logging>
+    <accesslog>access.log</accesslog>
+    <errorlog>error.log</errorlog>
+    <loglevel>3</loglevel>
+  </logging>
+</icecast>
