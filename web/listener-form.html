@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WIT Radio Listener Message</title>
+<style>
+body{
+background:#071018;
+color:white;
+font-family:Arial,sans-serif;
+padding:24px;
+}
+.container{
+max-width:600px;
+margin:auto;
+background:#101c28;
+padding:24px;
+border-radius:18px;
+border:2px solid #00AEEF;
+}
+input,textarea,select{
+width:100%;
+padding:12px;
+margin-top:10px;
+margin-bottom:18px;
+border-radius:10px;
+border:none;
+}
+button{
+background:#00AEEF;
+color:white;
+padding:14px 20px;
+border:none;
+border-radius:10px;
+font-weight:700;
+cursor:pointer;
+}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>Send a Message to WIT Radio</h1>
+
+<form>
+<label>Name</label>
+<input type="text" placeholder="First name only">
+
+<label>Message Type</label>
+<select>
+<option>Shoutout</option>
+<option>Song Request</option>
+<option>Insurance Question</option>
+<option>Station Feedback</option>
+</select>
+
+<label>Message</label>
+<textarea rows="6" placeholder="Your message..."></textarea>
+
+<button type="submit">Send Message</button>
+</form>
+</div>
+</body>
+</html>
