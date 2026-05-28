@@ -2,10 +2,12 @@ default_station: writ-fm
 
 stations:
   writ-fm:
-    call_sign: WRIT-FM
+    call_sign: WIT Radio
     agent:
-      kind: claude
-      command: claude
+      kind: gemini
+      command: python3
+      args:
+        - tools/gemini_prompt_cli.py
     paths:
       output_dir: output
       home_dir: ~/.writ
@@ -19,15 +21,17 @@ stations:
       api_port: 8001
       source_password_env: WRIT_SOURCE_PASSWORD
       source_password: writ_source_2024
-      stream_name: WRIT-FM
-      stream_genre: Talk Radio
-      stream_description: The frequency between frequencies
+      stream_name: WIT Radio
+      stream_genre: AI Radio
+      stream_description: AI-powered radio from We Insure Things
 
   klod-fm:
     call_sign: KLOD-FM
     agent:
-      kind: claude
-      command: claude
+      kind: gemini
+      command: python3
+      args:
+        - tools/gemini_prompt_cli.py
     paths:
       output_dir: output/stations/klod-fm
       home_dir: ~/.writ/stations/klod-fm
@@ -41,7 +45,7 @@ stations:
       source_password: writ_source_2024
       stream_name: KLOD-FM
       stream_genre: AI Radio
-      stream_description: Claude CLI directed autonomous radio
+      stream_description: Gemini-directed autonomous radio
 
   cdex-fm:
     call_sign: CDEX-FM
