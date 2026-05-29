@@ -507,6 +507,18 @@ def get_now_playing() -> dict:
     data.setdefault("station", STATION.call_sign)
     data.setdefault("mount", STATION.stream.mount)
     data["listeners"] = _listener_fn() if _listener_fn else 0
+
+    # Enrich with artwork info if possible
+    track_type = data.get("type")
+    if track_type == "music":
+        discogs = get_discogs_info()
+        if discogs.get("discogs"):
+            data["cover_art"] = discogs["discogs"].get("thumb_url")
+            data["artist"] = discogs["discogs"].get("artist")
+    elif track_type == "talk":
+        data["artist"] = data.get("host", "AI Host")
+        # Could add show-specific icons here in the future
+
     return data
 
 

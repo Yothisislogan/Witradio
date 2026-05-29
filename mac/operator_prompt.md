@@ -97,6 +97,7 @@ pgrep -af "ezstream.*$WRIT_RUNTIME_DIR/radio.xml" || echo "STREAMER DOWN"
 pgrep -af "feeder.py" || echo "FEEDER DOWN"
 curl -sf "$ICECAST_STATUS_URL" | uv run python -c "import os,sys,json,urllib.parse; mount=os.environ.get('WRIT_ICECAST_MOUNT'); src=json.load(sys.stdin).get('icestats',{}).get('source',{}); sources=src if isinstance(src,list) else [src] if src else []; ok=any(urllib.parse.urlparse(str(s.get('listenurl',''))).path==mount or s.get('mount')==mount for s in sources); print('SOURCE OK' if ok else 'NO SOURCE')"
 curl -sf http://localhost:4009/health && echo "music-gen: UP" || echo "music-gen: DOWN"
+[ -n "$GEMINI_API_KEY" ] && echo "Gemini API: CONFIGURED" || echo "Gemini API: MISSING"
 ```
 
 If stream is down:
@@ -147,7 +148,7 @@ cd mac/content_generator && uv run python talk_generator.py --plan --show midnig
 Priority order: station-local music pool → current slot if empty → next airing → the airing after, and so on.
 
 ### 3. Stock Music Bumpers
-Only if music-gen.server is running at localhost:4009.
+AI music can be generated via local music-gen.server (localhost:4009) or Gemini API (if GEMINI_API_KEY is set).
 
 ```bash
 cd mac/content_generator && uv run python music_bumper_generator.py --status
@@ -158,9 +159,9 @@ If any show has fewer than 20 music tracks:
 cd mac/content_generator && uv run python music_bumper_generator.py --all --min 20
 ```
 
-**Only run ONE bumper generator at a time.** The music-gen server is a single GPU process.
+**Only run ONE bumper generator at a time.** API generation is fast but still serialized to keep logic simple.
 
-If music-gen.server is down, skip bumper generation entirely.
+If neither local server nor Gemini API is available, skip bumper generation entirely.
 
 ### 4. Process Listener Messages
 ```bash
