@@ -27,6 +27,7 @@ sys.path.insert(0, str(PROJECT_ROOT / "mac"))
 
 from station_config import load_station_config  # noqa: E402
 from music_gen_client import MUSIC_GEN_BASE_URL, generate_music, is_server_available  # noqa: E402
+from music_api_client import generate_music_api, is_api_available  # noqa: E402
 
 STATION = load_station_config()
 BUMPERS_DIR = STATION.bumper_dir
@@ -473,28 +474,45 @@ def generate_one_bumper(show_id: str, verbose: bool = True) -> bool:
     show_dir = BUMPERS_DIR / show_id
     show_dir.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    audio_path = show_dir / f"{show_id}_bumper_{timestamp}.flac"
+
+    use_api = is_api_available()
+    ext = ".mp3" if use_api else ".flac"
+    audio_path = show_dir / f"{show_id}_bumper_{timestamp}{ext}"
     meta_path = audio_path.with_suffix(".json")
 
     kind = "vocal" if not instrumental else "instrumental"
+    model_name = "lyria" if use_api else "ace-step"
     if verbose:
-        print(f"  [{show_id}] {int(duration)}s ({kind}) — {caption[:70]}...")
+        print(f"  [{show_id}] {int(duration)}s ({kind}) using {model_name} — {caption[:70]}...")
 
     start = time.perf_counter()
-    guidance = round(random.uniform(4.0, 10.0), 1)
     ok = False
-    for attempt in range(1, GENERATE_ATTEMPTS + 1):
-        if attempt > 1 and verbose:
-            print(f"  retrying {show_id} ({attempt}/{GENERATE_ATTEMPTS})...")
-        if not ensure_music_gen_available(verbose=verbose):
+
+    if use_api:
+        # API path: no need for local server or lock, but we still respect GENERATE_ATTEMPTS
+        for attempt in range(1, GENERATE_ATTEMPTS + 1):
+            if attempt > 1 and verbose:
+                print(f"  retrying API {show_id} ({attempt}/{GENERATE_ATTEMPTS})...")
+            ok = generate_music_api(caption, audio_path, duration=duration, lyrics=lyrics)
+            if ok:
+                break
             time.sleep(5)
-            continue
-        ok = generate_music(caption, audio_path, duration=duration,
-                            instrumental=instrumental, lyrics=lyrics,
-                            guidance_scale=guidance)
-        if ok:
-            break
-        time.sleep(5)
+    else:
+        # Local path
+        guidance = round(random.uniform(4.0, 10.0), 1)
+        for attempt in range(1, GENERATE_ATTEMPTS + 1):
+            if attempt > 1 and verbose:
+                print(f"  retrying {show_id} ({attempt}/{GENERATE_ATTEMPTS})...")
+            if not ensure_music_gen_available(verbose=verbose):
+                time.sleep(5)
+                continue
+            ok = generate_music(caption, audio_path, duration=duration,
+                                instrumental=instrumental, lyrics=lyrics,
+                                guidance_scale=guidance)
+            if ok:
+                break
+            time.sleep(5)
+
     elapsed = time.perf_counter() - start
 
     if ok:
@@ -509,7 +527,7 @@ def generate_one_bumper(show_id: str, verbose: bool = True) -> bool:
             "generated_at": datetime.now().isoformat(),
             "generation_seconds": round(elapsed, 1),
             "ai_generated": True,
-            "model": "ace-step",
+            "model": model_name,
         }
         meta_path.write_text(json.dumps(meta, indent=2))
         if verbose:
@@ -545,10 +563,9 @@ def main():
         print_status()
         return
 
-    if not is_server_available():
-        print(f"music-gen.server not available at {MUSIC_GEN_BASE_URL}")
-        print("Start it with:")
-        print("  cd /path/to/music-gen.server && uv run uvicorn src.kortexa.music_gen.server:app --port 4009")
+    if not is_server_available() and not is_api_available():
+        print(f"Neither music-gen.server nor Gemini API are available.")
+        print("Set GEMINI_API_KEY or start the local server.")
         sys.exit(1)
 
     with generation_lock():
