@@ -19,9 +19,7 @@
       --shadow: 0 22px 80px rgba(0, 0, 0, 0.45);
     }
 
-    * {
-      box-sizing: border-box;
-    }
+    * { box-sizing: border-box; }
 
     body {
       margin: 0;
@@ -117,7 +115,7 @@
       filter: drop-shadow(0 18px 24px rgba(0, 0, 0, 0.42));
     }
 
-    .artwork .album-label {
+    .album-label {
       position: absolute;
       left: 16px;
       right: 16px;
@@ -197,13 +195,21 @@
       font-size: clamp(14px, 2vw, 17px);
     }
 
+    .audio-row,
     .now-box {
       background: var(--panel);
       border: 1px solid var(--line);
       border-radius: 26px;
-      padding: 22px;
+      padding: 20px;
       display: grid;
-      gap: 16px;
+      gap: 14px;
+    }
+
+    .audio-row.top-player {
+      background:
+        linear-gradient(135deg, rgba(0, 174, 239, 0.20), rgba(8, 24, 38, 0.90)),
+        var(--panel);
+      box-shadow: 0 18px 42px rgba(0, 174, 239, 0.12);
     }
 
     .section-label {
@@ -212,6 +218,49 @@
       letter-spacing: .12em;
       font-size: 12px;
       font-weight: 900;
+    }
+
+    audio {
+      width: 100%;
+      accent-color: var(--wit-blue);
+    }
+
+    .button-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    button {
+      appearance: none;
+      border: 0;
+      cursor: pointer;
+      color: white;
+      font-weight: 900;
+      letter-spacing: -0.01em;
+      border-radius: 18px;
+      padding: 16px;
+      font-size: 16px;
+      transition: transform .18s ease, filter .18s ease, box-shadow .18s ease;
+    }
+
+    button:hover { transform: translateY(-2px); filter: brightness(1.08); }
+    button:active { transform: translateY(0); }
+
+    .like-btn {
+      background: linear-gradient(135deg, var(--good), #139A53);
+      box-shadow: 0 14px 28px rgba(51, 209, 122, .18);
+    }
+
+    .dislike-btn {
+      background: linear-gradient(135deg, var(--bad), #C53939);
+      box-shadow: 0 14px 28px rgba(255, 104, 104, .16);
+    }
+
+    .feedback-note {
+      color: var(--muted);
+      font-size: 13px;
+      min-height: 18px;
     }
 
     .song-title {
@@ -261,64 +310,6 @@
       color: var(--muted);
       font-size: 14px;
       margin-top: 2px;
-    }
-
-    .audio-row {
-      display: grid;
-      gap: 14px;
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 26px;
-      padding: 18px;
-    }
-
-    audio {
-      width: 100%;
-      accent-color: var(--wit-blue);
-    }
-
-    .button-row {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 12px;
-    }
-
-    button {
-      appearance: none;
-      border: 0;
-      cursor: pointer;
-      color: white;
-      font-weight: 900;
-      letter-spacing: -0.01em;
-      border-radius: 18px;
-      padding: 16px;
-      font-size: 16px;
-      transition: transform .18s ease, filter .18s ease, box-shadow .18s ease;
-    }
-
-    button:hover {
-      transform: translateY(-2px);
-      filter: brightness(1.08);
-    }
-
-    button:active {
-      transform: translateY(0);
-    }
-
-    .like-btn {
-      background: linear-gradient(135deg, var(--good), #139A53);
-      box-shadow: 0 14px 28px rgba(51, 209, 122, .18);
-    }
-
-    .dislike-btn {
-      background: linear-gradient(135deg, var(--bad), #C53939);
-      box-shadow: 0 14px 28px rgba(255, 104, 104, .16);
-    }
-
-    .feedback-note {
-      color: var(--muted);
-      font-size: 13px;
-      min-height: 18px;
     }
 
     .mini-grid {
@@ -392,6 +383,7 @@
       .brand-row { padding-right: 92px; }
       .monster { top: -38px; right: 12px; }
       .mini-grid { grid-template-columns: 1fr; }
+      .button-row { grid-template-columns: 1fr; }
       .footer-line { flex-direction: column; align-items: flex-start; }
     }
   </style>
@@ -415,7 +407,7 @@
 
           <div class="mini-card">
             <strong>Artwork Slot</strong>
-            <span>Replace the image URL with generated cover art or track artwork.</span>
+            <span>Replace this with generated cover art or track artwork.</span>
           </div>
         </aside>
 
@@ -426,6 +418,20 @@
               <h1>WIT Radio</h1>
               <p class="tagline">Lyric-free AI music, DJ breaks, and monster-powered vibes.</p>
             </div>
+          </div>
+
+          <div class="audio-row top-player">
+            <div class="section-label">Listen Live</div>
+            <audio id="audioPlayer" controls preload="none">
+              <source src="http://129.146.215.221:8000/stream" type="audio/ogg" />
+              Your browser does not support the audio element.
+            </audio>
+
+            <div class="button-row">
+              <button class="like-btn" id="likeButton" type="button">👍 Like this song</button>
+              <button class="dislike-btn" id="dislikeButton" type="button">👎 Don’t like this song</button>
+            </div>
+            <div class="feedback-note" id="feedbackNote">Your feedback helps WIT Radio learn what to play more often.</div>
           </div>
 
           <div class="now-box">
@@ -447,19 +453,6 @@
                 <div class="dj-role" id="djRole">Keeping the workday moving with clean energy.</div>
               </div>
             </div>
-          </div>
-
-          <div class="audio-row">
-            <audio id="audioPlayer" controls preload="none">
-              <source src="http://129.146.215.221:8000/stream" type="audio/ogg" />
-              Your browser does not support the audio element.
-            </audio>
-
-            <div class="button-row">
-              <button class="like-btn" id="likeButton" type="button">👍 Like this song</button>
-              <button class="dislike-btn" id="dislikeButton" type="button">👎 Don’t like this song</button>
-            </div>
-            <div class="feedback-note" id="feedbackNote">Your feedback helps WIT Radio learn what to play more often.</div>
           </div>
 
           <div class="mini-grid">
@@ -511,31 +504,14 @@
     };
 
     const djProfiles = {
-      "Morning Acoustic": {
-        name: "Sunny",
-        role: "Easing into the day with warm acoustic energy."
-      },
-      "The Day Shift": {
-        name: "Dash",
-        role: "Keeping the workday moving with clean energy."
-      },
-      "Dance Party": {
-        name: "Nova",
-        role: "Turning the night up with neon dance energy."
-      },
-      "The Night Shift": {
-        name: "Nyx",
-        role: "Guiding the overnight signal with smooth late-night sound."
-      }
+      "Morning Acoustic": { name: "Sunny", role: "Easing into the day with warm acoustic energy." },
+      "The Day Shift": { name: "Dash", role: "Keeping the workday moving with clean energy." },
+      "Dance Party": { name: "Nova", role: "Turning the night up with neon dance energy." },
+      "The Night Shift": { name: "Nyx", role: "Guiding the overnight signal with smooth late-night sound." }
     };
 
     function initials(name) {
-      return (name || "DJ")
-        .split(" ")
-        .map(part => part[0])
-        .join("")
-        .slice(0, 2)
-        .toUpperCase();
+      return (name || "DJ").split(" ").map(part => part[0]).join("").slice(0, 2).toUpperCase();
     }
 
     function updatePlayer(data) {
