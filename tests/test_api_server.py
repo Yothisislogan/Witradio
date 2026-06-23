@@ -19,10 +19,10 @@ class ApiServerTests(unittest.TestCase):
         with patch.object(api_server, "datetime", FixedDatetime):
             info = api_server.get_schedule_info()
 
-        self.assertEqual(info["current"]["show_id"], "crosswire")
-        self.assertEqual(info["upcoming"][0]["show_id"], "sonic_archaeology")
-        self.assertEqual(info["upcoming"][0]["starts_around"], "18:00")
-        self.assertEqual(info["upcoming"][0]["starts_at"], "2026-05-05T18:00:00")
+        self.assertEqual(info["current"]["show_id"], "day_shift")
+        self.assertEqual(info["upcoming"][0]["show_id"], "dance_party")
+        self.assertEqual(info["upcoming"][0]["starts_around"], "20:00")
+        self.assertEqual(info["upcoming"][0]["starts_at"], "2026-05-05T20:00:00")
 
     def test_station_prefixed_now_playing_route_is_resolved(self):
         self.assertEqual(

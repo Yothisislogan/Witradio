@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WRIT-FM Player</title>
+    <style>
+        :root {
+            --primary-bg: #071018;
+            --card-bg: #101c28;
+            --accent: #00AEEF;
+            --text-main: #ffffff;
+            --text-dim: #a0aec0;
+            --shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.4);
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background: transparent;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            color: var(--text-main);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .player-container {
+            background: var(--card-bg);
+            border: 1px solid rgba(0, 174, 239, 0.3);
+            border-radius: 16px;
+            padding: 20px;
+            width: 100%;
+            max-width: 400px;
+            box-shadow: var(--shadow);
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .artwork-container {
+            width: 100%;
+            aspect-ratio: 1;
+            background: #0b141d;
+            border-radius: 12px;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+
+        .artwork-container img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: opacity 0.5s ease;
+        }
+
+        .placeholder-art {
+            position: absolute;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+        }
+
+        .placeholder-art svg {
+            width: 80px;
+            height: 80px;
+            fill: var(--accent);
+            opacity: 0.2;
+            margin-bottom: 8px;
+        }
+
+        .placeholder-art span {
+            font-size: 24px;
+            font-weight: 900;
+            color: var(--accent);
+            opacity: 0.15;
+            letter-spacing: 2px;
+        }
+
+        .track-info {
+            text-align: center;
+        }
+
+        .track-name {
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 4px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .artist-name {
+            font-size: 14px;
+            color: var(--text-dim);
+            margin-bottom: 8px;
+        }
+
+        .controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 24px;
+        }
+
+        .play-btn {
+            background: var(--accent);
+            border: none;
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: transform 0.2s;
+        }
+
+        .play-btn:hover {
+            transform: scale(1.05);
+        }
+
+        .play-btn svg {
+            fill: white;
+            width: 24px;
+            height: 24px;
+        }
+
+        .volume-container {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            width: 100%;
+        }
+
+        .volume-slider {
+            flex-grow: 1;
+            accent-color: var(--accent);
+            height: 4px;
+            cursor: pointer;
+        }
+
+        .status-badge {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--accent);
+            border: 1px solid var(--accent);
+            padding: 2px 8px;
+            border-radius: 4px;
+            width: fit-content;
+            margin: 0 auto;
+        }
+
+        .live-dot {
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            background: #ff4d4d;
+            border-radius: 50%;
+            margin-right: 4px;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.3; }
+            100% { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <div class="player-container">
+        <div class="status-badge"><span class="live-dot"></span>Live</div>
+
+        <div class="artwork-container">
+            <div class="placeholder-art">
+                <svg viewBox="0 0 24 24"><path d="M20 6h-8l-2-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-6 10H6v-2h8v2zm4-4H6v-2h12v2z"/></svg>
+                <span>WRIT</span>
+            </div>
+            <img id="artwork" src="" style="opacity: 0;">
+        </div>
+
+        <div class="track-info">
+            <div id="track-name" class="track-name">Loading...</div>
+            <div id="artist-name" class="artist-name">WRIT-FM</div>
+        </div>
+
+        <div class="controls">
+            <button id="play-pause" class="play-btn">
+                <svg id="play-icon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                <svg id="pause-icon" viewBox="0 0 24 24" style="display:none;"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+            </button>
+        </div>
+
+        <div class="volume-container">
+            <svg viewBox="0 0 24 24" style="width: 18px; fill: var(--text-dim);"><path d="M14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77zm-2 0L7.41 7.23H3v10.54h4.41L12 21.77V3.23z"/></svg>
+            <input type="range" id="volume" class="volume-slider" min="0" max="1" step="0.01" value="0.8">
+        </div>
+
+        <audio id="audio-stream" crossorigin="anonymous"></audio>
+    </div>
+
+    <script>
+        // Configuration - update these to match your server deployment
+        const STREAM_URL = 'http://localhost:8000/stream';
+        const API_URL = 'http://localhost:8001';
+
+        const audio = document.getElementById('audio-stream');
+        const playBtn = document.getElementById('play-pause');
+        const playIcon = document.getElementById('play-icon');
+        const pauseIcon = document.getElementById('pause-icon');
+        const volumeSlider = document.getElementById('volume');
+        const trackNameEl = document.getElementById('track-name');
+        const artistNameEl = document.getElementById('artist-name');
+        const artworkImg = document.getElementById('artwork');
+
+        let isPlaying = false;
+
+        function togglePlay() {
+            if (isPlaying) {
+                audio.pause();
+                // To minimize latency when resuming, we reset the source
+                audio.src = '';
+                isPlaying = false;
+                playIcon.style.display = 'block';
+                pauseIcon.style.display = 'none';
+            } else {
+                audio.src = STREAM_URL;
+                audio.play();
+                isPlaying = true;
+                playIcon.style.display = 'none';
+                pauseIcon.style.display = 'block';
+            }
+        }
+
+        playBtn.addEventListener('click', togglePlay);
+
+        volumeSlider.addEventListener('input', (e) => {
+            audio.volume = e.target.value;
+        });
+
+        async function updateMetadata() {
+            try {
+                // Fetch now playing info (now enriched with artist and cover_art)
+                const response = await fetch(`${API_URL}/now-playing`);
+                const data = await response.json();
+
+                // Update track text
+                trackNameEl.textContent = data.track || 'WRIT-FM';
+                artistNameEl.textContent = data.artist || 'AI Radio';
+
+                if (data.cover_art) {
+                    artworkImg.src = data.cover_art;
+                    artworkImg.style.opacity = 1;
+                } else {
+                    // Reset artwork if none available
+                    artworkImg.src = '';
+                    artworkImg.style.opacity = 0;
+                }
+            } catch (err) {
+                console.error('Metadata update failed', err);
+            }
+        }
+
+        // Poll for metadata updates every 10 seconds
+        setInterval(updateMetadata, 10000);
+        updateMetadata();
+
+        // Handle stream ending or error
+        audio.addEventListener('error', () => {
+            console.error('Stream error');
+            if (isPlaying) {
+                setTimeout(() => { audio.load(); audio.play(); }, 5000);
+            }
+        });
+    </script>
+</body>
+</html>

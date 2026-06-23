@@ -27,10 +27,17 @@ DEFAULT_NEWS_FEEDS = (
     "https://feeds.bbci.co.uk/news/rss.xml",
     "https://feeds.npr.org/1001/rss.xml",
 )
+DEFAULT_SPORTS_FEEDS = (
+    "https://www.espn.com/espn/rss/news",
+    "https://feeds.bbci.co.uk/sport/rss.xml",
+)
 NEWS_CACHE_TTL_SECONDS = int(os.environ.get("WRIT_NEWS_CACHE_TTL", "600"))
 NEWS_TIMEOUT_SECONDS = int(os.environ.get("WRIT_NEWS_TIMEOUT", "6"))
 
-_NEWS_CACHE: dict[str, object] = {"timestamp": 0.0, "items": []}
+_NEWS_CACHE: dict[str, dict[str, object]] = {
+    "general": {"timestamp": 0.0, "items": []},
+    "sports": {"timestamp": 0.0, "items": []},
+}
 
 
 def log(msg: str) -> None:
@@ -168,16 +175,11 @@ def _normalize_title(title: str) -> str:
     return re.sub(r"[^a-z0-9]+", " ", title.lower()).strip()
 
 
-def fetch_headlines(max_items: int | None = None) -> list[dict]:
+def _fetch_from_feeds(feeds: list[str], cache_key: str, max_items: int) -> list[dict]:
     now = time.time()
-    cached_items = _NEWS_CACHE.get("items", [])
-    if cached_items and now - float(_NEWS_CACHE.get("timestamp", 0.0)) < NEWS_CACHE_TTL_SECONDS:
-        return list(cached_items)
-
-    max_items = max_items or int(os.environ.get("WRIT_NEWS_MAX_ITEMS", "8"))
-    feed_env = os.environ.get("WRIT_NEWS_FEEDS")
-    feeds = [f.strip() for f in feed_env.split(",")] if feed_env else list(DEFAULT_NEWS_FEEDS)
-    feeds = [f for f in feeds if f]
+    cache = _NEWS_CACHE.get(cache_key, {"timestamp": 0.0, "items": []})
+    if cache["items"] and now - float(cache.get("timestamp", 0.0)) < NEWS_CACHE_TTL_SECONDS:
+        return list(cache["items"])
 
     headlines: list[dict] = []
     seen: set[str] = set()
@@ -210,9 +212,24 @@ def fetch_headlines(max_items: int | None = None) -> list[dict]:
         if len(headlines) >= max_items:
             break
 
-    _NEWS_CACHE["timestamp"] = now
-    _NEWS_CACHE["items"] = list(headlines)
+    _NEWS_CACHE[cache_key] = {"timestamp": now, "items": list(headlines)}
     return headlines
+
+
+def fetch_headlines(max_items: int | None = None) -> list[dict]:
+    limit = max_items or int(os.environ.get("WRIT_NEWS_MAX_ITEMS", "8"))
+    feed_env = os.environ.get("WRIT_NEWS_FEEDS")
+    feeds = [f.strip() for f in feed_env.split(",")] if feed_env else list(DEFAULT_NEWS_FEEDS)
+    feeds = [f for f in feeds if f]
+    return _fetch_from_feeds(feeds, "general", limit)
+
+
+def fetch_sports_headlines(max_items: int | None = None) -> list[dict]:
+    limit = max_items or int(os.environ.get("WRIT_SPORT_NEWS_MAX_ITEMS", "8"))
+    feed_env = os.environ.get("WRIT_SPORT_NEWS_FEEDS")
+    feeds = [f.strip() for f in feed_env.split(",")] if feed_env else list(DEFAULT_SPORTS_FEEDS)
+    feeds = [f for f in feeds if f]
+    return _fetch_from_feeds(feeds, "sports", limit)
 
 
 def format_headlines(headlines: list[dict], max_items: int | None = None) -> str:

@@ -42,8 +42,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from helpers import (
-    log, preprocess_for_tts, fetch_headlines, format_headlines, run_claude,
-    render_kokoro, render_single_voice, concatenate_audio, get_audio_duration,
+    log, preprocess_for_tts, fetch_headlines, fetch_sports_headlines,
+    format_headlines, run_claude, render_kokoro, render_single_voice,
+    concatenate_audio, get_audio_duration,
 )
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -73,6 +74,7 @@ SEGMENT_WORD_TARGETS = {
     # Hosted talk breaks
     "deep_dive": (550, 900),
     "news_analysis": (500, 800),
+    "sports_update": (400, 700),
     "interview": (700, 1000),
     "panel": (700, 1000),
     "story": (500, 850),
@@ -98,6 +100,17 @@ Connect current events to deeper themes. Ask the questions daytime anchors don't
 Be thoughtful, not reactive. Skeptical but not cynical.
 
 HEADLINES:
+{headlines}
+
+Use [pause] for natural rhythm. Output ONLY the spoken words.""",
+
+    "sports_update": """Provide a real-time update and analysis of current sporting events.
+Don't just list scores; provide context, personality, and insight.
+How do these events affect the fans and the atmosphere of the city?
+What is the 'vibe' of the sports world right now?
+Connect sports to the broader human experience of competition and community.
+
+SPORTS HEADLINES:
 {headlines}
 
 Use [pause] for natural rhythm. Output ONLY the spoken words.""",
@@ -300,6 +313,94 @@ TOPIC_POOLS = {
         "The tradeoff between clever and clear",
         "How teams decide what good enough means",
         "The politics hidden inside architecture choices",
+    ],
+    "morning_reflections": [
+        "The first cup of coffee and the silence before the world wakes up",
+        "Morning light as a reset button for the mind",
+        "The specific optimism of a 7am sunrise",
+        "Early morning rituals that ground us",
+        "The difference between waking up and being awake",
+        "The sound of the neighborhood coming back to life",
+        "Dawn as a second chance to get things right",
+        "The texture of the air just before the sun breaks",
+        "Why we feel more hopeful at 6am than we did at 6pm",
+        "Morning birds and the original radio broadcast",
+        "The ritual of opening the curtains to a new day",
+        "The first deep breath of the morning",
+        "Finding clarity in the early blue light",
+        "The quiet persistence of the early riser",
+        "Why some days need a slower start than others",
+        "Morning shadows and the geometry of a new day",
+        "The transition from dreaming to doing",
+        "The poetry of a breakfast table in the sun",
+        "Morning dew and the temporary nature of things",
+        "The specific frequency of early morning radio",
+    ],
+    "workday_vibes": [
+        "Finding flow in the middle of a busy afternoon",
+        "The rhythm of the city during the working hours",
+        "How background music changes the texture of productivity",
+        "The 2pm slump and how to dance through it",
+        "The shared experience of the mid-week hustle",
+        "The democracy of the office coffee machine",
+        "Why we need sound to focus on the silence of work",
+        "The specific light of a Tuesday afternoon",
+        "Commuting as a transition between versions of ourselves",
+        "The small victories of a productive morning",
+        "How a single song can rescue a difficult shift",
+        "The geography of the workspace and how it shapes us",
+        "Finding the signal in a day full of noise",
+        "The art of the lunch break - reclaiming an hour",
+        "The rhythm of the keyboard and the song of production",
+        "Why we look forward to the weekend while living in the now",
+        "The quiet camaraderie of a shared deadline",
+        "The physics of a busy street corner at noon",
+        "How the city changes gears when the shift ends",
+        "The steady pulse of the working world",
+    ],
+    "dance_music": [
+        "The collective consciousness of the dance floor",
+        "Why we need the bass to feel alive",
+        "The history of the beat from disco to house",
+        "Electronic music as a modern ritual",
+        "How a great DJ reads the energy of a room",
+        "The physical response to a perfectly timed drop",
+        "Dance as a language that doesn't need words",
+        "The architecture of a club and how it holds the sound",
+        "Why we dance to remember and dance to forget",
+        "The evolution of synthesized sound on the floor",
+        "The intimacy of dancing in a crowd of strangers",
+        "How a groove becomes a destination",
+        "The geometry of movement and the physics of rhythm",
+        "Why some beats feel like home",
+        "The transition from the street to the dance floor",
+        "The night as a canvas for electronic exploration",
+        "How the lights and the sound create a temporary world",
+        "The enduring power of the four-on-the-floor kick",
+        "The alchemy of a perfect mix",
+        "Why the dance floor is the last safe space for pure feeling",
+    ],
+    "night_reflections": [
+        "The intimacy of late-night radio conversations",
+        "What the city looks like when everyone else is asleep",
+        "The clarity that comes at 3am",
+        "Night as a space for creative exploration",
+        "The songs that only make sense after midnight",
+        "The solitude of the night-shift worker",
+        "Why the truth is easier to tell in the dark",
+        "The metaphysics of a single streetlamp",
+        "Night-time as a sanctuary from the demands of the day",
+        "The specific frequency of silence at 4am",
+        "How the night stretches time and memory",
+        "The dreams that stay with us after we wake",
+        "The geography of a quiet house at night",
+        "Why we stay up late to find the version of ourselves we like",
+        "The stars as the original broadcast signal",
+        "The comfort of knowing someone else is awake",
+        "How the night air feels different on the skin",
+        "The rhythm of the heart when the world is still",
+        "The poetry of the late-night drive",
+        "Night as the birthplace of all our best stories",
     ],
 }
 
@@ -900,6 +1001,9 @@ def select_topic(
     avoid_slugs: set[str] | None = None,
 ) -> str:
     """Pick a topic, avoiding recent, requested, and in-slot repeats."""
+    if segment_type == "sports_update":
+        return "Current Sporting Events"
+
     topic_pools = effective_topic_pools()
     pool = topic_pools.get(topic_focus, [])
     if not pool:
@@ -967,9 +1071,19 @@ def build_generation_prompt(
     prompt_template = prompt_template.replace("{station_name}", STATION.call_sign)
 
     # Handle special template vars
+    if segment_type in ("news_analysis", "deep_dive", "show_intro"):
+        sports = fetch_sports_headlines(max_items=3)
+        if sports:
+            sports_text = format_headlines(sports)
+            intent_context = (intent_context or "") + f"\n\nCURRENT SPORTS CONTEXT (mention if relevant to the city's mood):\n{sports_text}"
+
     if segment_type == "news_analysis":
         headlines = fetch_headlines()
         headline_text = format_headlines(headlines) if headlines else "No headlines available - discuss the nature of news itself."
+        prompt_template = prompt_template.format(headlines=headline_text)
+    elif segment_type == "sports_update":
+        headlines = fetch_sports_headlines()
+        headline_text = format_headlines(headlines) if headlines else "No sports headlines available - talk about the spirit of competition."
         prompt_template = prompt_template.format(headlines=headline_text)
     elif segment_type == "interview":
         guest = random.choice(INTERVIEW_GUESTS)
@@ -1437,7 +1551,7 @@ def main():
     if args.list_types:
         print("\n=== Segment Types ===\n")
         print("Hosted talk breaks:")
-        for st in ["deep_dive", "news_analysis", "interview", "panel", "story", "listener_mailbag", "music_essay"]:
+        for st in ["deep_dive", "news_analysis", "sports_update", "interview", "panel", "story", "listener_mailbag", "music_essay"]:
             mn, mx = SEGMENT_WORD_TARGETS[st]
             print(f"  {st:20s} {mn}-{mx} words")
         print("\nShort-form (transitions):")

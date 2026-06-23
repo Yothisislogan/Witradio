@@ -95,8 +95,13 @@ def build_operator_brief(min_segments: int = 3) -> dict[str, Any]:
         })
     focuses = sorted({show.topic_focus for show in schedule.shows.values() if show.topic_focus})
 
+    from helpers import fetch_sports_headlines, format_headlines
+    sports = fetch_sports_headlines(max_items=5)
+    sports_context = format_headlines(sports) if sports else "No major sports news right now."
+
     return {
         "generated_at": datetime.now().isoformat(timespec="seconds"),
+        "sports_context": sports_context,
         "station": {
             "station_id": STATION.id,
             "call_sign": STATION.call_sign,
@@ -131,6 +136,9 @@ def format_operator_brief(brief: dict[str, Any]) -> str:
         f"Current: {current['show_name']} ({current['show_id']})",
         f"Host: {current['host']} | Focus: {current['topic_focus']}",
         f"Slot: {current['slot']} | Segments: {current['segments']}",
+        "",
+        "Real-time Sports Context:",
+        brief.get("sports_context", "None"),
         "",
         "Upcoming slots:",
     ]
