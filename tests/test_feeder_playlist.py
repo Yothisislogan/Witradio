@@ -79,7 +79,7 @@ class FeederPlaylistTests(unittest.TestCase):
 
         types = [entry["type"] for entry in entries]
         self.assertEqual(types.count("bumper"), 6)
-        self.assertEqual(types[-1], "silence")
+        self.assertNotIn("silence", types)
 
     def test_playlist_ignores_content_outside_station_output(self):
         with tempfile.TemporaryDirectory() as tmp:

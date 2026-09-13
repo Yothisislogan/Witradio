@@ -20,6 +20,8 @@ from datetime import datetime
 from pathlib import Path
 
 from station_config import load_station_config
+from feedback import FeedbackStore
+from wit_programming import host_info
 
 # Import play history
 try:
@@ -70,6 +72,7 @@ STATION_PROXY_ENDPOINTS = {
     "history",
     "messages",
     "message",
+    "feedback",
     "diary",
     "discogs",
     "qr",
@@ -194,6 +197,8 @@ class NowPlayingHandler(http.server.BaseHTTPRequestHandler):
                 return
             if method == "POST" and path == "/message":
                 return self._handle_message_body(body or b"")
+            if method == "POST" and path == "/feedback":
+                return self._handle_feedback_body(body or b"")
             return self._send_error(404, "Unknown endpoint")
 
         target = f"http://127.0.0.1:{station.stream.api_port}{path}"
@@ -251,30 +256,43 @@ class NowPlayingHandler(http.server.BaseHTTPRequestHandler):
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path.rstrip("/") or "/"
         station_route = parse_station_route(path)
-        if station_route:
-            station_id, station_path = station_route
-            if station_path != "/message":
-                self.send_response(404)
-                self.end_headers()
-                return
-            content_length = int(self.headers.get('Content-Length', 0))
+        endpoint = station_route[1] if station_route else path
+        if endpoint not in ("/message", "/feedback"):
+            return self._send_error(404, "Unknown endpoint")
+        try:
+            content_length = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            return self._send_error(400, "Invalid content length")
+        if not 0 < content_length <= 4096:
+            return self._send_error(413, "Request body must be between 1 and 4096 bytes")
+        self.connection.settimeout(5)
+        try:
             body = self.rfile.read(content_length)
+        except TimeoutError:
+            return self._send_error(408, "Request timed out")
+        if station_route:
             return self._proxy_station_request(
-                station_id,
-                station_path,
-                parsed.query,
-                method="POST",
-                body=body,
+                station_route[0], endpoint, parsed.query, method="POST", body=body,
                 content_type=self.headers.get("Content-Type"),
             )
+        if endpoint == "/feedback":
+            return self._handle_feedback_body(body)
+        return self._handle_message_body(body)
 
-        if path != "/message":
-            self.send_response(404)
-            self.end_headers()
-            return
-
-        content_length = int(self.headers.get('Content-Length', 0))
-        self._handle_message_body(self.rfile.read(content_length))
+    def _handle_feedback_body(self, body: bytes):
+        try:
+            data = json.loads(body)
+            if not isinstance(data, dict):
+                raise ValueError("Expected a feedback object")
+            store = FeedbackStore(STATION.home_dir / "feedback.db")
+            store.vote(data.get("track_id"), data.get("listener_id"), data.get("vote"))
+        except (ValueError, UnicodeError, TypeError) as exc:
+            return self._send_error(400, str(exc))
+        except OverflowError as exc:
+            return self._send_error(429, str(exc))
+        except Exception:
+            return self._send_error(503, "Feedback is temporarily unavailable. Please try again.")
+        self._send_json({"status": "saved", "track_id": data["track_id"], "vote": data["vote"]}, "no-store")
 
     def _handle_message_body(self, body: bytes):
         client_ip = self.client_address[0]
@@ -350,7 +368,15 @@ def get_health_status() -> dict:
     streamer_attached = _api_mode == "stream"
     streamer_ok = encoder is not None and encoder.poll() is None
     tunnel_ok = check_process("cloudflared")
-    healthy = icecast_ok and tunnel_ok and (streamer_ok or not streamer_attached)
+    data = get_now_playing()
+    audio = dict(data.get("audio") or {})
+    age = time.time() - (audio.get("checked_at") or 0)
+    if not 0 <= age <= 90:
+        audio["status"] = "stale"
+    # A reverse proxy deployment does not require a cloudflared process.
+    tunnel_required = os.environ.get("WRIT_REQUIRE_TUNNEL", "0") == "1"
+    healthy = (icecast_ok and (tunnel_ok or not tunnel_required)
+               and (not streamer_attached or (streamer_ok and audio.get("status") == "audible")))
     return {
         "status": "healthy" if healthy else "degraded",
         "mode": _api_mode,
@@ -365,6 +391,8 @@ def get_health_status() -> dict:
             },
             "tunnel": {"status": "up" if tunnel_ok else "down"},
             "api": {"status": "up"},
+            "audio": audio,
+            "programming": {"status": "backup" if data.get("type") == "backup" else "scheduled"},
         },
         "uptime_seconds": int(time.time() - SERVER_START_TIME),
     }
@@ -503,6 +531,13 @@ def get_messages(limit: int = 20) -> list[dict]:
 def get_now_playing() -> dict:
     """Read current track info from shared in-memory state."""
     data = dict(_track_info)
+    if not data:
+        try:
+            candidate = json.loads(STATION.now_playing_file.read_text())
+            if isinstance(candidate, dict) and candidate.get("station_id") == STATION.id:
+                data = candidate
+        except (OSError, ValueError):
+            pass
     data.setdefault("station_id", STATION.id)
     data.setdefault("station", STATION.call_sign)
     data.setdefault("mount", STATION.stream.mount)
@@ -526,7 +561,7 @@ def get_schedule_info() -> dict:
             upcoming.append({
                 "show_id": future_show.show_id,
                 "name": future_show.name,
-                "host": future_show.host,
+                **host_info(future_show.show_id, future_show.host),
                 "topic_focus": future_show.topic_focus,
                 "starts_at": starts_at.isoformat(),
                 "starts_around": starts_at.strftime("%H:%M"),
@@ -537,7 +572,7 @@ def get_schedule_info() -> dict:
                 "show_id": current.show_id,
                 "name": current.name,
                 "description": current.description,
-                "host": current.host,
+                **host_info(current.show_id, current.host),
                 "topic_focus": current.topic_focus,
                 "segment_types": current.segment_types,
                 "bumper_style": current.bumper_style,
@@ -670,8 +705,9 @@ def get_qr_code() -> bytes | None:
     return generate_qr_png(discogs_data["url"])
 
 
-class ReusableTCPServer(socketserver.TCPServer):
+class ReusableTCPServer(socketserver.ThreadingTCPServer):
     allow_reuse_address = True
+    daemon_threads = True
 
 
 def _set_api_state(track_info: dict, encoder_getter, listener_fn, mode: str) -> None:

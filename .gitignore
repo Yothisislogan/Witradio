@@ -54,3 +54,9 @@ uv.lock
 
 # Kokoro venv
 mac/kokoro/.venv/
+
+# Approved local fallback audio and browser QA artifacts
+output/backup_music/
+artifacts/
+node_modules/
+package-lock.json

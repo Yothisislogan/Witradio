@@ -5,9 +5,9 @@ shows:
   morning_acoustic:
     name: "Morning Acoustic"
     description: "Coffeehouse acoustic, folk-pop, peaceful sunrise energy."
-    host: "liminal_operator"
+    host: "wit_sunny"
     topic_focus: "morning_reflections"
-    segment_types: ["story", "music_essay"]
+    segment_types: ["dj_break"]
     bumper_style: "acoustic"
     voices:
       host: "am_michael"
@@ -15,9 +15,9 @@ shows:
   day_shift:
     name: "The Day Shift"
     description: "Upbeat workday music, modern pop, indie, positive energy."
-    host: "signal"
+    host: "wit_dash"
     topic_focus: "workday_vibes"
-    segment_types: ["deep_dive", "music_essay"]
+    segment_types: ["dj_break"]
     bumper_style: "modern_pop"
     voices:
       host: "am_onyx"
@@ -25,9 +25,9 @@ shows:
   dance_party:
     name: "Dance Party"
     description: "EDM, house, dance-pop, club energy, Brazilian phonk."
-    host: "ember"
+    host: "wit_nova"
     topic_focus: "dance_music"
-    segment_types: ["story", "music_essay"]
+    segment_types: ["dj_break"]
     bumper_style: "edm"
     voices:
       host: "af_bella"
@@ -35,9 +35,9 @@ shows:
   night_shift:
     name: "The Night Shift"
     description: "Late-night lo-fi, synthwave, ambient electronic atmosphere."
-    host: "nyx"
+    host: "wit_nyx"
     topic_focus: "night_reflections"
-    segment_types: ["deep_dive", "story"]
+    segment_types: ["dj_break"]
     bumper_style: "ambient"
     voices:
       host: "af_heart"
