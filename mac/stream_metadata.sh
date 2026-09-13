@@ -30,6 +30,7 @@ name_of() {
     stem="${stem%.*}"
     case "$stem" in
         *listener_response*) echo "Listener Mail" ;;
+        *dj_break*)          echo "DJ Break" ;;
         *deep_dive*)         echo "Deep Dive" ;;
         *news_analysis*)     echo "Signal Report" ;;
         *interview*)         echo "The Interview" ;;
@@ -77,7 +78,7 @@ if [ -n "$CURRENT" ] && [ -f "$CURRENT" ]; then
     STEM="${BASENAME%.*}"
     META_FILE="$(dirname "$CURRENT")/$STEM.json"
     # Bumpers ship sidecar JSON with a curated display_name; prefer it.
-    if [ "$EXT" != "wav" ] && [ -f "$META_FILE" ]; then
+    if [ -f "$META_FILE" ]; then
         DISPLAY=$(json_field "$META_FILE" display_name 2>/dev/null || true)
         [ -n "$DISPLAY" ] && TITLE="$DISPLAY"
     fi

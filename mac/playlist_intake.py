@@ -28,6 +28,9 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(Path(__file__).parent))
 from station_config import load_station_config  # noqa: E402
+from audio_library import is_quarantined, backup_tracks, audio_duration
+from play_history import get_history
+from wit_programming import PROFILES
 
 STATION = load_station_config()
 PLAYLIST_PATH = STATION.playlist_file
@@ -78,8 +81,18 @@ def select_next_track(tracks: list[str], prev: str) -> str:
     start_idx = tracks.index(prev) + 1 if prev in tracks else 0
     for offset in range(len(tracks)):
         candidate = tracks[(start_idx + offset) % len(tracks)]
-        if Path(candidate).exists():
-            return candidate
+        path = Path(candidate)
+        if not path.exists() or is_quarantined(path, STATION):
+            continue
+        if "talk_segments" in path.parts and any(show in path.parts for show in PROFILES):
+            if not 0 < audio_duration(path) <= 35:
+                continue
+            try:
+                if not get_history().talk_budget_remaining():
+                    continue
+            except Exception:
+                continue
+        return candidate
 
     return ""
 
@@ -96,6 +109,8 @@ def write_current(track: str) -> None:
 def main() -> int:
     tracks = read_playlist()
     if not tracks:
+        tracks = [str(p) for p in backup_tracks(STATION)]
+    if not tracks:
         # Empty playlist — return nothing so ezstream knows the playlist is
         # exhausted; feeder.py will rebuild and we'll be called again.
         return 0
@@ -104,6 +119,8 @@ def main() -> int:
     archive_if_slot_track(prev)
 
     next_track = select_next_track(tracks, prev)
+    if not next_track:
+        next_track = select_next_track([str(p) for p in backup_tracks(STATION)], prev)
     if not next_track:
         return 0
 

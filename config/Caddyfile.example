@@ -1,0 +1,19 @@
+# Replace this hostname with the domain you control and point its DNS to the tower.
+# Caddy obtains/renews HTTPS certificates; ports 80 and 443 must reach this host.
+radio.weinsurethings.com {
+    root * /opt/witradio/web
+    encode gzip
+
+    handle /stream {
+        reverse_proxy 127.0.0.1:8000 {
+            flush_interval -1
+        }
+    }
+    handle_path /api/* {
+        reverse_proxy 127.0.0.1:8001
+    }
+    handle {
+        try_files {path} /wit-music-player.html
+        file_server
+    }
+}

@@ -13,24 +13,28 @@ station:
 
 hosts:
   morning_acoustic:
+    id: "wit_sunny"
     name: "Sunny"
     voice: "am_michael"
     style: "warm, calm, coffeehouse, thoughtful"
     role: "Eases listeners into the day with acoustic music and light encouragement."
 
   day_shift:
+    id: "wit_dash"
     name: "Dash"
     voice: "am_onyx"
     style: "upbeat, efficient, helpful, modern"
     role: "Keeps the workday moving with clean energy, quick notes, and useful insurance reminders."
 
   dance_party:
+    id: "wit_nova"
     name: "Nova"
     voice: "af_bella"
     style: "high-energy, fun, playful, confident"
     role: "Turns the night up with dance music, shoutouts, and short high-energy station breaks."
 
   night_shift:
+    id: "wit_nyx"
     name: "Nyx"
     voice: "af_heart"
     style: "smooth, reflective, calm, late-night"

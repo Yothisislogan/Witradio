@@ -17,12 +17,16 @@ import signal
 import subprocess
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(Path(__file__).parent))
 from station_config import apply_station_env, load_station_config  # noqa: E402
+from audio_library import backup_tracks, is_quarantined, quarantine, audio_duration
+from feedback import FeedbackStore, track_id, weighted_rotation
+from stream_monitor import StreamMonitor
+from wit_programming import host_info, PROFILES
 
 if "--station" in sys.argv:
     station_idx = sys.argv.index("--station")
@@ -39,7 +43,7 @@ TALK_DIR = STATION.talk_dir
 BUMPER_DIR = STATION.bumper_dir
 NOW_PLAYING_DEFAULT = STATION.now_playing_file
 CURRENT_TRACK_FILE = STATION.current_track_file
-AUDIO_SUFFIXES = {".flac", ".mp3", ".wav"}
+AUDIO_SUFFIXES = {".flac", ".mp3", ".wav", ".ogg"}
 
 
 def _env_int(name: str, default: int) -> int:
@@ -119,6 +123,8 @@ def _is_current_station_content(path: Path, expected_show_id: str | None = None)
         return False
 
     metadata = _content_metadata(path)
+    if metadata.get("approved") is False or is_quarantined(path, STATION):
+        return False
     metadata_station = _metadata_station_id(metadata)
     if metadata_station and metadata_station != STATION.id:
         log(f"  Skipping {metadata_station} content on {STATION.id}: {path.name}")
@@ -153,7 +159,7 @@ def get_show():
     return {
         "show_id": resolved.show_id,
         "show_name": resolved.name,
-        "host": resolved.host,
+        **host_info(resolved.show_id, resolved.host),
         "topic_focus": resolved.topic_focus,
         "description": resolved.description,
         "slot": slot_key(airing_start),
@@ -170,6 +176,16 @@ def get_talk_segments(show_id: str, slot: str) -> list[Path]:
         (p for p in slot_dir.glob("*.wav") if _is_current_station_content(p)),
         key=lambda p: p.name,
     )
+
+    if show_id in PROFILES:
+        # Existing multi-minute files must not undermine the new short-break policy.
+        segments = [p for p in segments if 0 < audio_duration(p) <= 35]
+        if HISTORY_ENABLED:
+            try:
+                segments = segments[:get_history().talk_budget_remaining()]
+            except Exception as exc:
+                log(f"Talk budget unavailable; continuing with music: {exc}")
+                segments = []
 
     # If any files have sequence prefixes (00_, 01_, ...), respect the order
     has_sequence = any(s.name[:3].rstrip("_").isdigit() for s in segments)
@@ -244,8 +260,7 @@ def get_bumpers(show_id: str) -> list[Path]:
                 files = fresh
         except Exception as e:
             log(f"  Bumper history filter failed: {e}")
-    random.shuffle(files)
-    return files
+    return weighted_rotation(files, STATION)
 
 
 def clean_name(filepath: Path) -> str:
@@ -255,7 +270,7 @@ def clean_name(filepath: Path) -> str:
         "news_analysis": "Signal Report", "interview": "The Interview",
         "panel": "Crosswire", "story": "Story Hour",
         "listener_mailbag": "Listener Hours", "music_essay": "Sonic Essay",
-        "station_id": STATION.call_sign, "show_intro": "Show Opening",
+        "dj_break": "DJ Break", "station_id": STATION.call_sign, "show_intro": "Show Opening",
         "show_outro": "Show Closing",
     }
     for key, friendly in types.items():
@@ -305,7 +320,7 @@ def write_now_playing(info: dict):
 def describe_track(filepath: Path) -> tuple[str, str]:
     """Return (display_name, track_type) for a track path."""
     s = str(filepath)
-    if "music_bumpers" in s:
+    if "music_bumpers" in s or "backup_music" in s:
         meta_path = filepath.with_suffix(".json")
         name = "AI Music"
         if meta_path.exists():
@@ -314,7 +329,7 @@ def describe_track(filepath: Path) -> tuple[str, str]:
                 name = m.get("display_name", name)
             except Exception:
                 pass
-        return name, "bumper"
+        return name, "backup" if "backup_music" in s else "bumper"
     if "talk_segments" in s:
         return clean_name(filepath), "talk"
     if "silence" in filepath.name.lower():
@@ -331,7 +346,7 @@ def make_bumper_entry(filepath: Path) -> dict:
             name = m.get("display_name", name)
         except Exception:
             pass
-    return {"path": str(filepath), "type": "bumper", "name": name}
+    return {"path": str(filepath), "type": "backup" if "backup_music" in filepath.parts else "bumper", "name": name}
 
 
 def append_bumpers(entries: list[dict], bumpers: list[Path], start_idx: int, count: int) -> int:
@@ -383,6 +398,8 @@ def build_playlist(show_id: str, slot: str) -> list[dict]:
     entries = []
     talks = get_talk_segments(show_id, slot)
     bumpers = get_bumpers(show_id)
+    if not bumpers:
+        bumpers = backup_tracks(STATION)
     bumper_idx = 0
 
     if TALK_SEGMENTS_PER_PLAYLIST:
@@ -396,10 +413,9 @@ def build_playlist(show_id: str, slot: str) -> list[dict]:
         return entries
 
     if not talks:
-        # No talk, stay music-forward and keep silence only as the playlist tail.
+        # The intake wraps; a music playlist must never deliberately append silence.
         for b in bumpers[:MUSIC_ONLY_TRACK_LIMIT]:
             entries.append(make_bumper_entry(b))
-        entries.append({"path": str(SILENCE_FILE), "type": "silence", "name": "Silence"})
         return entries
 
     # Music-forward flow: lead with music, then use talk as hosted breaks between
@@ -408,6 +424,8 @@ def build_playlist(show_id: str, slot: str) -> list[dict]:
     bumper_idx = append_bumpers(entries, bumpers, bumper_idx, lead_in)
 
     for talk in talks:
+        if entries and entries[-1]["type"] == "talk":
+            break  # Never stack spoken links when the music pool is thin.
         entries.append({"path": str(talk), "type": "talk", "name": clean_name(talk)})
         n_bumpers = random.randint(*MUSIC_BUMPERS_AFTER_TALK_RANGE)
         bumper_idx = append_bumpers(entries, bumpers, bumper_idx, n_bumpers)
@@ -425,6 +443,18 @@ def write_playlist(entries: list[dict]):
     tmp.replace(PLAYLIST_FILE)
 
 
+def ensure_last_resort_audio():
+    # Ensure silence file exists for fallback
+    if not SILENCE_FILE.exists():
+        log("Creating silence fallback file...")
+        SILENCE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        subprocess.run([
+            "ffmpeg", "-y", "-v", "quiet",
+            "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
+            "-t", "30", str(SILENCE_FILE),
+        ], check=True)
+
+
 def run():
     global running, ezstream_proc
     signal.signal(signal.SIGTERM, signal_handler)
@@ -435,15 +465,21 @@ def run():
     log(f"Station: {STATION.id} | Mount: {STATION.stream.mount}")
     log(f"Playlist: {PLAYLIST_FILE}")
 
-    # Ensure silence file exists for fallback
-    if not SILENCE_FILE.exists():
-        log("Creating silence fallback file...")
-        SILENCE_FILE.parent.mkdir(parents=True, exist_ok=True)
-        subprocess.run([
-            "ffmpeg", "-y", "-v", "quiet",
-            "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
-            "-t", "30", str(SILENCE_FILE),
-        ], check=True)
+    ensure_last_resort_audio()
+
+    monitor = StreamMonitor(
+        f"http://{STATION.stream.icecast_host}:{STATION.stream.icecast_port}{STATION.stream.mount}",
+        CURRENT_TRACK_FILE,
+    )
+    monitor.start()
+    last_recovery = 0
+    last_music_set = set()
+    last_rebuilt_tail = None
+    feedback_store = None
+    try:
+        feedback_store = FeedbackStore(STATION.home_dir / "feedback.db")
+    except Exception as exc:
+        log(f"Feedback unavailable: {exc}")
 
     # Shared state for API server
     track_info = {"track": None, "type": None, "show": None}
@@ -475,9 +511,7 @@ def run():
 
     # Seed last_recorded_track so a feeder restart doesn't double-record the in-flight track
     try:
-        last_recorded_track = (
-            CURRENT_TRACK_FILE.read_text().strip() if CURRENT_TRACK_FILE.exists() else None
-        ) or None
+        last_recorded_track = (CURRENT_TRACK_FILE.read_text().strip(), CURRENT_TRACK_FILE.stat().st_mtime_ns)
     except Exception:
         last_recorded_track = None
 
@@ -512,45 +546,45 @@ def run():
         if now - last_check >= 5:
             last_check = now
 
-            # Source of truth: stream_metadata.sh writes the active track's
-            # absolute path here as ezstream advances. Fall back to the
-            # first playlist entry only if that file is missing or stale
-            # (eg. before the first track change after a restart).
+            # Only the intake's active file is now-playing; never guess from a queue.
             current_path = ""
+            current_stamp = None
             try:
-                if CURRENT_TRACK_FILE.exists():
-                    current_path = CURRENT_TRACK_FILE.read_text().strip()
-            except Exception:
-                current_path = ""
-
-            track_name: str | None = None
-            track_type: str | None = None
+                current_path = CURRENT_TRACK_FILE.read_text().strip()
+                current_stamp = CURRENT_TRACK_FILE.stat().st_mtime_ns
+            except OSError:
+                pass
             current_path_obj = Path(current_path) if current_path else None
-            if current_path_obj and current_path_obj.is_absolute() and current_path_obj.exists():
+            track_name, track_type, identity = None, "unknown", None
+            if (current_path_obj and current_path_obj.is_absolute()
+                    and current_path_obj.exists() and _path_is_under(current_path_obj, STATION.output_dir)):
+                track_name, track_type = describe_track(current_path_obj)
+                if track_type in ("bumper", "backup"):
+                    identity = track_id(current_path_obj, STATION)
+            audio = monitor.snapshot()
+            audio_public = {key: audio[key] for key in ("status", "checked_at", "failures")}
+            if identity and feedback_store and audio["status"] == "audible":
                 try:
-                    track_name, track_type = describe_track(current_path_obj)
-                except Exception:
-                    track_name, track_type = None, None
-
-            if track_name is None:
-                if playlist_entries:
-                    track_name = playlist_entries[0]["name"]
-                    track_type = playlist_entries[0]["type"]
-                else:
-                    track_name = show["show_name"]
-                    track_type = "silence"
+                    feedback_store.register(identity, track_name)
+                except Exception as exc:
+                    log(f"Feedback registration unavailable: {exc}")
+                    identity = None
 
             np_info = {
                 "station_id": STATION.id,
                 "station": STATION.call_sign,
                 "mount": STATION.stream.mount,
                 "track": track_name,
+                "track_id": identity if feedback_store and audio["status"] == "audible" else None,
                 "type": track_type,
+                "audio": audio_public,
+                "started_at": datetime.fromtimestamp(current_stamp / 1e9, timezone.utc).isoformat() if current_stamp else None,
                 "show_id": show["show_id"],
                 "show": show["show_name"],
                 "host": show["host"],
+                "dj_role": show["dj_role"],
                 "slot": show["slot"],
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "listeners": get_listener_count(),
             }
             # Update shared dict for API server
@@ -563,39 +597,54 @@ def run():
                 if (
                     current_path_obj
                     and current_path_obj.is_absolute()
-                    and current_path != last_recorded_track
+                    and (current_path, current_stamp) != last_recorded_track
                 ):
                     record_play(current_path, show["show_id"])
-                    last_recorded_track = current_path
+                    last_recorded_track = (current_path, current_stamp)
             except Exception:
                 pass
 
-        # Check if ezstream died and restart it (with cooldown)
-        if ezstream_proc and ezstream_proc.poll() is not None:
-            if not hasattr(run, '_last_restart') or now - run._last_restart > 30:
-                log("  ezstream died, restarting...")
-                run._last_restart = now
-                ezstream_proc = start_ezstream()
-            elif now - run._last_restart > 30:
-                pass  # still in cooldown
+        # Recover only a managed encoder; two failed samples avoid brief transition noise.
+        audio = monitor.snapshot()
+        encoder_dead = ezstream_proc is not None and ezstream_proc.poll() is not None
+        audio_failed = audio["failures"] >= 2
+        if ezstream_proc is not None and (encoder_dead or audio_failed) and now - last_recovery >= 60:
+            if audio.get("quarantine") and audio.get("track_path"):
+                try:
+                    quarantine(Path(audio["track_path"]), STATION, "Two silent stream samples")
+                except OSError as exc:
+                    log(f"Unable to quarantine silent track: {exc}")
+            log(f"Recovering stream: {'encoder exited' if encoder_dead else audio['status']}")
+            last_recovery = now
+            if ezstream_proc.poll() is None:
+                os.killpg(ezstream_proc.pid, signal.SIGTERM)
+                try:
+                    ezstream_proc.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    os.killpg(ezstream_proc.pid, signal.SIGKILL)
+                    ezstream_proc.wait(timeout=5)
+            ezstream_proc = start_ezstream()
 
-        # Check if we need to rebuild — a file appeared in the slot that
-        # wasn't there when we last built (e.g., operator generated a new
-        # segment mid-slot, or a listener response landed).
-        # Files leaving the set (moved to aired/) must NOT trigger a rebuild.
+        # Replenish at the playlist tail and when music arrives during fallback.
+        # This also lets new votes affect each subsequent rotation.
         if now - last_rebuild_check >= 30:
             last_rebuild_check = now
             current_unaired = {p.name for p in get_talk_segments(current_show_id, current_slot)}
-            new_files = current_unaired - last_talk_set
-            if new_files:
-                log(f"  New content in slot ({len(new_files)} file(s)), rebuilding playlist")
+            music_set = {str(p) for p in get_bumpers(current_show_id)}
+            current_token = (current_path, current_stamp)
+            at_tail = (playlist_entries and current_path == playlist_entries[-1]["path"]
+                       and current_token != last_rebuilt_tail)
+            if current_unaired - last_talk_set or music_set != last_music_set or at_tail:
                 playlist_entries = build_playlist(current_show_id, current_slot)
-                last_talk_set = {p.name for p in get_talk_segments(current_show_id, current_slot)}
+                last_talk_set = current_unaired
+                last_music_set = music_set
+                last_rebuilt_tail = current_token
                 write_playlist(playlist_entries)
                 signal_ezstream_reload()
 
         time.sleep(5)
 
+    monitor.stop()
     # Clean up ezstream if we started it
     if ezstream_proc and ezstream_proc.poll() is None:
         log("Stopping ezstream...")
@@ -669,6 +718,16 @@ def write_ezstream_config() -> Path:
       <program>ffmpeg -v quiet -i @T@ -af loudnorm=I=-16:TP=-1.5:LRA=11,afade=t=in:st=0:d=3,aresample=44100 -f s16le -acodec pcm_s16le -ar 44100 -ac 2 -</program>
       <file_ext>.flac</file_ext>
     </decoder>
+    <decoder>
+      <name>ffmpeg-mp3</name>
+      <program>ffmpeg -v quiet -i @T@ -af loudnorm=I=-16:TP=-1.5:LRA=11,aresample=44100 -f s16le -acodec pcm_s16le -ar 44100 -ac 2 -</program>
+      <file_ext>.mp3</file_ext>
+    </decoder>
+    <decoder>
+      <name>ffmpeg-ogg</name>
+      <program>ffmpeg -v quiet -i @T@ -af loudnorm=I=-16:TP=-1.5:LRA=11,aresample=44100 -f s16le -acodec pcm_s16le -ar 44100 -ac 2 -</program>
+      <file_ext>.ogg</file_ext>
+    </decoder>
   </decoders>
 
   <encoders>
@@ -686,6 +745,7 @@ def write_ezstream_config() -> Path:
 
 def start_ezstream() -> subprocess.Popen:
     """Start ezstream as a child process. Kills any stale instances first."""
+    ensure_last_resort_audio()
     write_ezstream_config()
 
     # Kill stale ezstream processes for this station only.

@@ -70,6 +70,13 @@ class PlayHistory:
             )
             conn.commit()
 
+    def talk_budget_remaining(self, limit: int = 4) -> int:
+        """Maximum WIT links per rolling hour, preserved across restarts."""
+        with sqlite3.connect(self.db_path) as conn:
+            count = conn.execute("""SELECT COUNT(*) FROM plays
+                WHERE vibe='talk' AND played_at >= datetime('now', '-1 hour')""").fetchone()[0]
+        return max(0, limit - count)
+
     def get_recent_plays(self, limit: int = 50) -> list[dict]:
         """Get recent plays."""
         with sqlite3.connect(self.db_path) as conn:

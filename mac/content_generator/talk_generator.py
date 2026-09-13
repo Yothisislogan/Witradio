@@ -70,6 +70,7 @@ from topic_bank import merge_topic_pools  # noqa: E402
 # =============================================================================
 
 SEGMENT_WORD_TARGETS = {
+    "dj_break": (32, 60),
     # Hosted talk breaks
     "deep_dive": (550, 900),
     "news_analysis": (500, 800),
@@ -85,6 +86,12 @@ SEGMENT_WORD_TARGETS = {
 }
 
 SEGMENT_PROMPTS = {
+    "dj_break": """Write a brief music-radio link, about 15-30 seconds spoken.
+One warm observation about the show's mood, then return to the music.
+Use the supplied host's identity and current show. Do not invent a song title,
+artist, listener message, personal experience, news, or upcoming event.
+No insurance pitch, lecture, invented factual anecdote, or long introduction.
+Output only the words to be spoken. Keep it within 32-60 words.""",
     "deep_dive": """Write a focused exploration of this topic for a music-forward station.
 Build one central idea through 2-3 vivid examples or short tangents.
 Leave room for music to carry the feeling after the break.
@@ -939,6 +946,88 @@ def select_topic(
     return random.choice(pool)
 
 
+TOPIC_POOLS.update({'morning_reflections': ['The first quiet cup',
+                         'Sunlight through a window',
+                         'A gentle start',
+                         'Taking one thing at a time',
+                         'Space before the day begins',
+                         'A familiar morning rhythm',
+                         'An unhurried breath',
+                         'Acoustic strings and soft light',
+                         'A short walk outside',
+                         'Finding a little calm',
+                         'Making room for today',
+                         'Small beginnings',
+                         'Putting the phone down',
+                         'A kitchen with music in it',
+                         'The pause before a busy day',
+                         'A fresh page',
+                         'Enjoying the slower song',
+                         'A moment for yourself',
+                         'Warmth in a simple melody',
+                         'Starting at your own pace'],
+ 'workday_vibes': ['Finding a steady rhythm',
+                   'A little energy between tasks',
+                   'A brief stretch',
+                   'Making space to concentrate',
+                   'The satisfaction of finishing one thing',
+                   'A fresh soundtrack for the afternoon',
+                   'Turning a corner in the day',
+                   'Taking a real break',
+                   'A change of pace',
+                   'A small burst of momentum',
+                   'Music while you make things',
+                   'Keeping the afternoon moving',
+                   'A beat for the next task',
+                   'Leaving room to think',
+                   'A few minutes away from a screen',
+                   'The next good idea',
+                   'A lighthearted reset',
+                   'A brighter part of the day',
+                   'Finding your focus again',
+                   'Wrapping up at your own pace'],
+ 'dance_music': ['A beat to move to',
+                 'Turning the energy up',
+                 'A little room to dance',
+                 'Letting the bass carry the moment',
+                 'The next wave of rhythm',
+                 'Neon and motion',
+                 'A small kitchen dance party',
+                 'Finding your own groove',
+                 'The lift before a new track',
+                 'Staying with the rhythm',
+                 'A night with some color',
+                 'The joy of moving',
+                 'A steady pulse',
+                 'A playful change of pace',
+                 'A moment of pure momentum',
+                 'Space for a little fun',
+                 'Getting out of your head',
+                 'Keeping the night moving',
+                 'A brighter beat',
+                 'The feeling of a fresh start'],
+ 'night_reflections': ['The quieter part of the day',
+                       'A little company after dark',
+                       'Soft lights and slow rhythms',
+                       'Leaving the day behind',
+                       'Taking the long way through a song',
+                       'A moment without a deadline',
+                       'A window lit at night',
+                       'Room to unwind',
+                       'The comfort of a familiar rhythm',
+                       'A softer landing',
+                       'The space between thoughts',
+                       'Music for an unhurried evening',
+                       'An easy breath',
+                       'Settling into the night',
+                       'Letting the melody drift',
+                       'A quiet corner',
+                       'Keeping company with the awake',
+                       'A little warmth after midnight',
+                       'Slowing the pace',
+                       'A gentle end to a busy day']})
+
+
 def build_generation_prompt(
     host_id: str,
     segment_type: str,
@@ -1032,13 +1121,16 @@ def run_generation(prompt: str, segment_type: str) -> str | None:
     if not script:
         return None
 
-    # Quality gate: check word count
+    # Bound ordinary DJ links; a generator overrun must not become a lecture.
     word_count = len(script.split())
     min_acceptable = int(min_words * 0.8)
     if word_count < min_acceptable:
         log(f"Script too short: {word_count} words (need {min_acceptable}+)")
         return None
 
+    if segment_type == "dj_break" and not min_words <= word_count <= max_words:
+        log(f"DJ break rejected: {word_count} words; expected {min_words}-{max_words}")
+        return None
     return script
 
 
@@ -1199,7 +1291,10 @@ def generate_segment(
     topic_slug = slugify_topic(topic)
 
     seq_prefix = f"{sequence:02d}_" if sequence is not None else ""
-    output_path = slot_dir / f"{seq_prefix}{segment_type}_{topic_slug}_{timestamp}.wav"
+    final_output_path = slot_dir / f"{seq_prefix}{segment_type}_{topic_slug}_{timestamp}.wav"
+    pending_dir = slot_dir / ".pending"
+    pending_dir.mkdir(exist_ok=True)
+    output_path = pending_dir / final_output_path.name
 
     # Preprocess for TTS
     processed = preprocess_for_tts(script)
@@ -1220,6 +1315,17 @@ def generate_segment(
 
     # Get duration and save metadata
     duration = get_audio_duration(output_path)
+    if segment_type == "dj_break" and (not duration or not 10 <= duration <= 35):
+        output_path.unlink(missing_ok=True)
+        log("DJ break rejected: rendered audio must be between 10 and 35 seconds")
+        return None
+    # Publish only complete, validated audio to the watched slot directory.
+    final_output_path.with_suffix(".json").write_text(json.dumps({
+        "station_id": STATION.id, "show_id": show_id, "type": segment_type,
+        "approved": True, "duration_seconds": duration,
+    }))
+    output_path.replace(final_output_path)
+    output_path = final_output_path
     duration_str = f"{int(duration // 60)}:{int(duration % 60):02d}" if duration else "?"
 
     SCRIPTS_DIR.mkdir(parents=True, exist_ok=True)

@@ -14,6 +14,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT / "mac"))
 from station_config import load_station_config  # noqa: E402
 from helpers import get_time_of_day
+from wit_programming import CONFIG as WIT_CONFIG, PROFILES as WIT_PROFILES
 
 # =============================================================================
 # STATION IDENTITY
@@ -381,6 +382,17 @@ The human is not the edge case.""",
 if STATION_CONFIG.id == "cdex-fm":
     HOSTS.update(CDEX_HOSTS)
 
+# The WIT configuration is also used by the public now-playing API.
+for profile in WIT_PROFILES.values():
+    HOSTS[profile["id"]] = {
+        "name": profile["name"], "identity": profile["role"],
+        "voice_style": profile["style"], "tts_voice": profile["voice"],
+        "philosophy": "Music first. Be brief, warm and useful.",
+        "anti_patterns": "Avoid " + ", ".join(WIT_CONFIG["station"]["avoid"]),
+        "speaking_pace_wpm": 130,
+    }
+WIT_HOST_IDS = {profile["id"] for profile in WIT_PROFILES.values()}
+
 # =============================================================================
 # TIME-AWARE BEHAVIOR
 # =============================================================================
@@ -473,6 +485,9 @@ Topic Focus: {show_context.get('topic_focus', '')}
 """
         if show_context.get('segment_type'):
             prompt += f"Segment Type: {show_context['segment_type']}\n"
+
+    if persona_id in WIT_HOST_IDS:
+        return prompt + "\nKeep the supplied show's energy. Do not invent listener messages or facts.\n"
 
     # Add time context
     ctx = get_operator_context()
