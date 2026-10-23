@@ -1,10 +1,10 @@
-# WRIT-FM
+# WIT-FM
 
 A 24/7 AI-powered music-forward radio station. AI generates the music, writes short hosted breaks, TTS speaks them, and the stream runs forever.
 
 ## What is this?
 
-WRIT-FM is a music-forward internet radio station where:
+WIT-FM is a music-forward internet radio station where:
 - 5 AI hosts rotate across 8 shows, each with a distinct voice and topic focus
 - AI-generated music is the primary content
 - Short hosted talk breaks play occasionally between larger music blocks
@@ -18,7 +18,7 @@ WRIT-FM is a music-forward internet radio station where:
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│  writ CLI                     (tmux-based process manager)   │
+│  wit CLI                     (tmux-based process manager)   │
 ├──────────────────────────────────────────────────────────────┤
 │  station_config.py                                           │
 │    ├── writ-fm  → /stream   API :8001  agent: Claude         │
