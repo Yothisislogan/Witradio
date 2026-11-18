@@ -142,7 +142,7 @@ class ScriptWriter:
         target = self.target_words(segment)
         if script.words > target * 1.35:
             problems.append(f"Too long: {script.words} words; cut it to about {target}")
-        elif script.words < target * 0.4:
+        elif script.words < target * 0.3:  # a truncated or lazy reply
             problems.append(f"Too short: {script.words} words; write about {target}")
         missing = [key for key in segment.fields if key not in script.extra]
         if missing:

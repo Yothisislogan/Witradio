@@ -45,14 +45,23 @@ class FactSheet:
     sources: dict[str, Source] = field(default_factory=dict)
     data: dict[str, Any] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
+    section_sources: dict[str, list[str]] = field(default_factory=dict)
 
     def add(self, heading: str, line: str, source: Source) -> None:
         self.sections.setdefault(heading, []).append(line)
         self.sources[source.name] = source
+        names = self.section_sources.setdefault(heading, [])
+        if source.name not in names:
+            names.append(source.name)
 
     @property
     def cleared(self) -> bool:
         return bool(self.sources) and all(s.cleared for s in self.sources.values())
+
+    def cleared_for(self, *headings: str) -> bool:
+        """Whether every source behind these sections is cleared for air."""
+        names = {n for h in headings for n in self.section_sources.get(h, [])}
+        return bool(names) and all(self.sources[n].cleared for n in names)
 
     def uncleared(self) -> list[str]:
         return sorted(name for name, s in self.sources.items() if not s.cleared)
@@ -68,13 +77,14 @@ class FactSheet:
     def to_json(self) -> dict:
         return {"name": self.name, "fetched_at": self.fetched_at, "sections": self.sections,
                 "sources": {k: asdict(v) for k, v in self.sources.items()}, "data": self.data,
-                "warnings": self.warnings}
+                "warnings": self.warnings, "section_sources": self.section_sources}
 
     @classmethod
     def from_json(cls, data: Mapping[str, Any]) -> "FactSheet":
         return cls(name=data["name"], fetched_at=data["fetched_at"], sections=dict(data.get("sections") or {}),
                    sources={k: Source(**v) for k, v in (data.get("sources") or {}).items()},
-                   data=dict(data.get("data") or {}), warnings=list(data.get("warnings") or []))
+                   data=dict(data.get("data") or {}), warnings=list(data.get("warnings") or []),
+                   section_sources={k: list(v) for k, v in (data.get("section_sources") or {}).items()})
 
     def save(self, path: Path) -> Path:
         path.parent.mkdir(parents=True, exist_ok=True)

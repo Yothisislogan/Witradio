@@ -255,6 +255,30 @@ class Director:
         tmp.replace(path)
         return data
 
+    def plan_ahead(self, hours: float = 36.0, now: datetime | None = None) -> dict:
+        """Plan the unlocked classical blocks of the next `hours`, so the Halo can write the
+        Count's links ahead of air, and say which blocks are unlocked in plans/_status.json."""
+        wall = self.schedule.to_wall(now) if now else self.schedule.now()
+        catalog = self.catalog()
+        status: dict[str, Any] = {"updated": _iso(utc_now()), "unlocked": {}, "planned": [],
+                                  "cleared_hours": round(catalog.cleared_hours("classical"), 1) if catalog else 0.0}
+        # Start a day back: program_blocks clips at the window, and a block on air must keep its real start.
+        for block in self.schedule.program_blocks(wall - timedelta(days=1), wall + timedelta(hours=hours)):
+            show = self.schedule.shows[block.show_id]
+            if show.program != "classical" or block.end <= wall:
+                continue
+            unlocked = self._classical_unlocked(show) is None
+            status["unlocked"][block.show_id] = unlocked
+            if unlocked:
+                plan = self.plan_for(block)
+                if plan is not None:
+                    status["planned"].append(plan["plan_id"])
+        self.plans_dir.mkdir(parents=True, exist_ok=True)
+        tmp = self.plans_dir / "._status.json.tmp"
+        tmp.write_text(json.dumps(status, indent=1))
+        tmp.replace(self.plans_dir / "_status.json")
+        return status
+
     def _from_plan(self, block: ProgramBlock, cursor: datetime, state: dict, context: dict) -> Item | None:
         plan = self.plan_for(block)
         if plan is None:
@@ -606,6 +630,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     p_aired = sub.add_parser("aired", help="record that an item started playing")
     p_aired.add_argument("--entry", default="")
     p_aired.add_argument("--path", required=True)
+    p_ahead = sub.add_parser("plan-ahead", help="plan unlocked classical blocks ahead, for the Halo")
+    p_ahead.add_argument("--hours", type=float, default=36.0)
     p_status = sub.add_parser("status", help="show the director's state")
     p_status.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
@@ -621,6 +647,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"director error: {exc}", file=sys.stderr)
             return 1
         print(item.annotate())
+        return 0
+    if args.cmd == "plan-ahead":
+        status = director.plan_ahead(args.hours)
+        print(f"cleared classical: {status['cleared_hours']} h; planned {len(status['planned'])}: "
+              + ", ".join(status["planned"]))
         return 0
     if args.cmd == "aired":
         info = director.aired(args.entry, args.path)

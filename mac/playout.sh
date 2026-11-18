@@ -59,7 +59,18 @@ liquidsoap --version | head -1
     done
 ) &
 DIRECTOR_LOOP=$!
-trap 'kill "$DIRECTOR_LOOP" 2>/dev/null; pkill -f "playout_director.py --station $STATION serve" 2>/dev/null' EXIT
+
+# Plan the classical blocks a day and a half ahead, every 15 minutes, so the
+# Halo can write the Count's links before air (mac/producer_daemon.py).
+(
+    while true; do
+        "$WRIT_PYTHON" mac/playout_director.py --station "$STATION" plan-ahead --hours 36 >/dev/null \
+            || echo "plan-ahead failed ($?)" >&2
+        sleep 900
+    done
+) &
+PLANNER_LOOP=$!
+trap 'kill "$DIRECTOR_LOOP" "$PLANNER_LOOP" 2>/dev/null; pkill -f "playout_director.py --station $STATION serve" 2>/dev/null' EXIT
 for _ in $(seq 1 50); do
     curl -sf "http://127.0.0.1:$WRIT_DIRECTOR_PORT/health" >/dev/null && break
     sleep 0.2

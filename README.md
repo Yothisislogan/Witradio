@@ -14,6 +14,8 @@ Phase 1 guide. Phase 1 covers the Liquidsoap playout (Ogg FLAC on
 bible's cleared classical recordings and The Stacks' Library of Congress
 recordings into the catalog, the format-hours
 schedule, the classical fill planner and the OpenAI-compatible LLM client.
+The shows themselves are written, fact-checked and voiced on the Halo with
+local models (section 7 of the runbook), using sports and market data feeds.
 
 ## What is this?
 
@@ -269,6 +271,10 @@ The listener daemon polls for new messages every 30 seconds and generates spoken
 ├── tools/pull_music.py         # Pull cleared music into the library and catalog
 ├── tools/pull_loc.py           # Library of Congress recordings for The Stacks, screened
 ├── config/loc_sources.yaml     # wit-next: LOC sources and the content screen lists
+├── config/voices.yaml          # Host voice cards and TTS engines on the Halo
+├── config/pronunciations.yaml  # Respellings for the voices (composers first)
+├── config/feeds.yaml           # Data providers and whether each is cleared for air
+├── config/prompts/             # House rules and host briefs for the script model
 ├── mac/
 │   ├── station_config.py        # Station config resolver and env exporter
 │   ├── playout_director.py     # wit-next: decides each item for Liquidsoap
@@ -280,6 +286,21 @@ The listener daemon polls for new messages every 30 seconds and generates spoken
 │   ├── music_library.py        # Download, check and catalogue music sources
 │   ├── loc_library.py          # loc.gov and Citizen DJ intake (paced, screened)
 │   ├── llm_client.py           # OpenAI-compatible LLM client (the Halo)
+│   ├── producer_daemon.py      # On the Halo: makes each show ahead of air
+│   ├── producers.py            # Shared producer pieces (slots, sidecars, rehearsal)
+│   ├── produce_classical.py    # The Count's links for the classical plans
+│   ├── produce_market.py       # The Market (Opening Bell, Closing Tape, Week Ahead)
+│   ├── produce_ying_yang.py    # Ying & Yang, with the Receipts predictions table
+│   ├── produce_monster_mix.py  # Monster Mix: drifting music and Wit's breaks
+│   ├── drift.py                # The Drift: one change per track
+│   ├── script_writer.py        # Host brief + facts -> JSON voice script
+│   ├── fact_check.py           # Every number and name must be in the facts
+│   ├── voices.py               # Voice scripts -> audio, one adapter per TTS engine
+│   ├── audio_tools.py          # ffmpeg helpers: join, loudness, convert
+│   ├── feeds.py                # Fact sheets and cleared-for-air sources
+│   ├── sports_feed.py          # Scores, schedules, headlines
+│   ├── market_feed.py          # FRED, Treasury, BLS, Fed Board releases
+│   ├── buffer_sync.py          # Halo <-> playout server over Tailscale
 │   ├── feeder.py               # Playlist feeder (manages ezstream + API)
 │   ├── radio.xml               # Legacy ezstream config; station configs generate runtime configs
 │   ├── api_server.py           # Now-playing API (daemon thread in feeder)

@@ -5,7 +5,8 @@ Written November 18, 2026, for Phase 0 of the overhaul (development plan:
 do: rotating the passwords, snapshotting the server, writing down what
 actually runs, and passing the Phase 0 gate. Section 6 covers Phase 1: the
 Liquidsoap playout, email alerts and stocking the music library, including
-the Library of Congress recordings for The Stacks.
+the Library of Congress recordings for The Stacks. Section 7 covers the
+Halo, which writes and voices the shows.
 
 Section 3 describes the live station **as the repository describes it**. The
 server may run changes that were never committed, so every row lists the
@@ -293,7 +294,7 @@ Liquidsoap asks the director for every item over localhost HTTP (port
 8102: the station API port plus 100). In a classical block the director
 plays the planner's plan: each work at its catalog gain, movements back to
 back, 2-4 s of digital silence between works, a station ID at the hour,
-and the host's links from `buffer/talk/<plan>/` once Phase 2 renders them.
+and the Count's links from `buffer/talk/<plan>/`, which the Halo writes and voices (section 7).
 Running late, it drops the fit pieces and won't start a work that would
 overrun the post by more than a minute. If the plan runs short, it fills
 with a one-movement classical work that ends before the post, else a
@@ -541,15 +542,133 @@ download flags don't track copyright: the script's year check does.
 Approved items wait in the catalog. The Stacks producer (development plan
 Phase 4) will schedule them.
 
-## 7. Decisions due by the end of Phase 0
+## 7. The Halo: writing and voicing the shows
+
+All the AI runs locally on the Halo: the script model, the voices and the
+music. The Halo makes each show ahead of air and copies the finished audio
+to the playout server on Hetzner over Tailscale.
+
+### 7.1 What to run on the Halo
+
+| Piece | What | Setting |
+|---|---|---|
+| Script model | Any OpenAI-compatible server: llama.cpp (Vulkan first), Lemonade, LM Studio or Ollama | `WRIT_LLM_BASE_URL` (e.g. `http://127.0.0.1:8080/v1`) and `WRIT_LLM_MODEL` |
+| Voices | Each engine in `config/voices.yaml` behind a server that speaks `POST /v1/audio/speech` and returns WAV, on the ports listed there, or a command that writes a WAV. Kokoro (`mac/kokoro/`) is every host's fallback | Reference clips in `WRIT_VOICES_DIR` (default `~/.writ/voices`) |
+| Music | music-gen.server with ACE-Step, already used by the old station. Lyria isn't needed, since everything runs locally | `MUSIC_GEN_URL` (default `http://localhost:4009`) |
+
+Check the engines and audition a host:
+
+```bash
+python3 mac/voices.py check
+```
+
+```bash
+python3 mac/voices.py say --host count "Good evening, night creatures. The world sleeps. We do not."
+```
+
+### 7.2 Start the producers
+
+```bash
+./writ --station wit-next start producers
+```
+
+Each cycle (every 5 minutes) pulls the server's plans, makes whatever is
+due, and pushes the audio:
+
+| Show | Made | Notes |
+|---|---|---|
+| The Count's classical links | 36 h ahead, from the server's plans | A link that fails the fact check becomes a plain announcement from the plan |
+| The Market | 2 h ahead; The Tape and this morning's releases 20 min ahead | Fails closed; every episode ends with the disclaimer |
+| Ying & Yang | 2 h ahead | Fails closed; logs a prediction, grades it from the scores, reads the Receipts |
+| Monster Mix | 12 h ahead | The Drift plus Wit's breaks; also fills classical slots that haven't unlocked; at most `WRIT_MONSTER_MIX_TRACKS_PER_HOUR` new tracks (default 8) |
+| The Stacks, Miles, Office Hours, Bedtime Stories | Not built yet | Their slots play the safe library |
+
+To hear a show without touching the buffer, rehearse one airing. It lands
+in `runtime/rehearsal/`:
+
+```bash
+python3 mac/producer_daemon.py show market_closing_tape --at "2026-11-18 16:30" --rehearse
+```
+
+### 7.3 Scripts and the fact check
+
+The script model gets the house rules and each host's brief
+(`config/prompts/`) as its system prompt, and the fetched facts as the only
+source of facts. It replies with a voice script (speaker, text, emotion,
+intensity, pace, nonverbal, pauses). Every number and proper name must be in
+the facts; misses go back to the model, and a script that still misses is
+dropped. The repository is public, so to keep the host briefs private, copy
+them elsewhere and set `WRIT_PROMPTS_DIR`.
+
+Hard names are respelled for the voices from `config/pronunciations.yaml`.
+The Count's anecdotes may only use facts from the plan and from a composer
+fact file, `config/composers/<composer-name>.txt`, one fact per line (dates,
+premieres, places). None exist yet.
+
+### 7.4 Sports and market data
+
+Try the feeds:
+
+```bash
+python3 mac/sports_feed.py
+```
+
+```bash
+python3 mac/market_feed.py --format closing_tape
+```
+
+| Feed | Provider | Key | Cleared for air |
+|---|---|---|---|
+| Scores, schedules, headlines | ESPN's public site API | none | No: unofficial, for rehearsal |
+| Treasury yields (same afternoon) | U.S. Treasury | none | Yes |
+| Oil, CPI, jobs, retail sales, release calendar | FRED | free, `FRED_API_KEY` | Yes |
+| S&P 500, Dow, Nasdaq, mortgage rates | FRED, republishing their owners' data | same | No, until licensed |
+| 8:30 AM releases | BLS | free, `BLS_API_KEY` (keyless allows 25 requests a day) | Yes |
+| What the Fed said | Federal Reserve Board press releases | none | Yes |
+
+`config/feeds.yaml` sets `cleared_for_air` per provider. Ying & Yang and
+any Market segment built on an uncleared provider only rehearse. Going on
+air takes a licensed scores feed (SportsDataIO, Goalserve, Sportradar) and
+a licensed source of index closes (for example Intrinio's end-of-day index
+levels, sold with display rights). Pick them and I'll add them as providers.
+The Halo needs to reach `site.api.espn.com`, `api.stlouisfed.org`,
+`home.treasury.gov`, `api.bls.gov` and `www.federalreserve.gov`.
+
+### 7.5 Getting the audio to Hetzner
+
+1. Put both machines on Tailscale, and give the Halo an SSH key that can
+   log in to the playout server.
+2. On the Halo, point the sync at the server's buffer:
+
+   ```bash
+   export WRIT_SYNC_REMOTE=witfm@<hetzner-tailscale-name>:/home/witfm/Witradio/output/stations/wit-next/buffer
+   ```
+
+3. The server plans the classical blocks 36 hours ahead on its own (the
+   playout runs a planner every 15 minutes) and writes
+   `buffer/plans/_status.json`, saying which blocks have unlocked. The Halo
+   pulls those and pushes finished audio; files land whole, so the playout
+   never sees half a segment.
+4. Prune old slots on both machines, for example from cron:
+
+   ```bash
+   python3 mac/buffer_sync.py prune --days 3
+   ```
+
+If the Halo goes dark, the server plays what's already in its buffer, then
+the safe library. That is the Phase 1 gate's "4 hours with the Halo switched
+off".
+
+## 8. Decisions due by the end of Phase 0
 
 From the development plan:
 
 1. **Playout engine.** Decided November 18: Liquidsoap (section 6).
-2. **Playout host.** Stay on Oracle or finish the Hetzner move. Each lossless
-   listener uses about 0.3 GB an hour.
+2. **Playout host.** Decided: the Hetzner server. Each lossless listener uses
+   about 0.3 GB an hour.
 3. **Where the Halo lives,** home or office. The less reliable the link, the
-   bigger the 48-hour buffer should be.
+   bigger the buffer should be.
 4. **KLOD-FM and CDEX-FM:** delete their configs, or keep one as a permanent
    test station.
-5. **Monthly budget** for Lyria and any paid data feeds.
+5. **Monthly budget** for a licensed scores feed and licensed market closes
+   (all AI runs locally, so there's no Lyria bill).

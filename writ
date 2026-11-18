@@ -60,11 +60,12 @@ API_COMPONENTS=(api)
 CONTENT_COMPONENTS=(music-gen operator listener)
 RELAY_COMPONENTS=(youtube)
 PLAYOUT_COMPONENTS=(playout station-api monitor)
-ALL_COMPONENTS=("${CORE_COMPONENTS[@]}" "${API_COMPONENTS[@]}" "${CONTENT_COMPONENTS[@]}" "${RELAY_COMPONENTS[@]}" "${PLAYOUT_COMPONENTS[@]}")
+HALO_COMPONENTS=(producers)
+ALL_COMPONENTS=("${CORE_COMPONENTS[@]}" "${API_COMPONENTS[@]}" "${CONTENT_COMPONENTS[@]}" "${RELAY_COMPONENTS[@]}" "${PLAYOUT_COMPONENTS[@]}" "${HALO_COMPONENTS[@]}")
 
 declare -A COMP_PORT=(
     [icecast]=8000 [stream]="$STATION_API_PORT" [tunnel]="" [api]="$PUBLIC_API_PORT" [youtube]=""
-    [music-gen]=4009 [operator]="" [listener]="" [playout]="" [station-api]="$STATION_API_PORT" [monitor]=""
+    [music-gen]=4009 [operator]="" [listener]="" [playout]="" [station-api]="$STATION_API_PORT" [monitor]="" [producers]=""
 )
 declare -A COMP_HEALTH_URL=(
     [icecast]="http://localhost:8000/status-json.xsl"
@@ -72,7 +73,7 @@ declare -A COMP_HEALTH_URL=(
     [api]="http://localhost:${PUBLIC_API_PORT}/health"
     [youtube]=""
     [music-gen]="http://localhost:4009/health" [operator]="" [listener]=""
-    [playout]="" [station-api]="http://localhost:${STATION_API_PORT}/health" [monitor]=""
+    [playout]="" [station-api]="http://localhost:${STATION_API_PORT}/health" [monitor]="" [producers]=""
 )
 declare -A COMP_PGREP=(
     [icecast]="icecast" [stream]="feeder.py"
@@ -81,10 +82,11 @@ declare -A COMP_PGREP=(
     [music-gen]="music.gen"
     [operator]="operator_daemon" [listener]="listener_daemon"
     [playout]="liquidsoap.*wit_next.liq" [station-api]="mac/api_server.py" [monitor]="playout_monitor.py"
+    [producers]="producer_daemon.py"
 )
 declare -A COMP_WAIT=(
     [icecast]=30 [stream]=10 [tunnel]=10 [api]=10
-    [youtube]=10 [music-gen]=180 [operator]=10 [listener]=10 [playout]=20 [station-api]=10 [monitor]=5
+    [youtube]=10 [music-gen]=180 [operator]=10 [listener]=10 [playout]=20 [station-api]=10 [monitor]=5 [producers]=5
 )
 
 # ── Colors ───────────────────────────────────────────────────
@@ -117,7 +119,7 @@ window_exists() {
 send_cmd() { local w="$1"; shift; tmux send-keys -t "$SESSION:$w" "$*" Enter; }
 
 is_station_scoped() {
-    case "$1" in stream|operator|listener|youtube|playout|station-api|monitor) return 0 ;; *) return 1 ;; esac
+    case "$1" in stream|operator|listener|youtube|playout|station-api|monitor|producers) return 0 ;; *) return 1 ;; esac
 }
 
 component_window() {
@@ -227,6 +229,7 @@ get_start_cmd() {
         playout)   echo "cd '$PROJECT_ROOT' && WRIT_STATION_ID='$STATION_ID' bash mac/playout.sh '$STATION_ID'" ;;
         station-api) echo "cd '$PROJECT_ROOT' && WRIT_STATION_ID='$STATION_ID' uv run python mac/api_server.py" ;;
         monitor)   echo "cd '$PROJECT_ROOT' && WRIT_STATION_ID='$STATION_ID' uv run python mac/playout_monitor.py --station '$STATION_ID' loop" ;;
+        producers) echo "cd '$PROJECT_ROOT' && WRIT_STATION_ID='$STATION_ID' uv run python mac/producer_daemon.py --station '$STATION_ID' loop" ;;
         music-gen)
             [[ -z "$MUSIC_GEN_DIR" || ! -d "$MUSIC_GEN_DIR" ]] && \
                 { err "music-gen.server not found. Set MUSIC_GEN_DIR."; return 1; }
@@ -297,6 +300,17 @@ start_one() {
     # Kill stale processes hogging the port before starting
     local port="${COMP_PORT[$comp]}"
     [[ -n "$port" ]] && kill_port "$port"
+
+    if [[ "$comp" == "producers" ]]; then
+        # On the Halo: the local models, the data keys and the sync target.
+        ensure_session
+        for var in WRIT_LLM_BASE_URL WRIT_LLM_MODEL FRED_API_KEY BLS_API_KEY MUSIC_GEN_URL WRIT_VOICES_DIR \
+                   WRIT_PROMPTS_DIR WRIT_SYNC_REMOTE WRIT_SYNC_SSH WRIT_MONSTER_MIX_TRACKS_PER_HOUR WRIT_COMPOSER_FACTS; do
+            set_tmux_env_if_present "$var"
+        done
+        mirror_tmux_env WRIT_REHEARSE
+        window_exists "$win" && tmux kill-window -t "$SESSION:$win" 2>/dev/null || true
+    fi
 
     if [[ "$comp" == "stream" || "$comp" == "playout" || "$comp" == "monitor" ]]; then
         # The feeder and Liquidsoap read the source password from their environment. tmux
@@ -539,6 +553,7 @@ cmd_help() {
   Select station:  writ --station klod-fm start stream
   Components:      icecast  stream  tunnel  api  youtube  music-gen  operator  listener
                    playout  station-api  monitor   (wit-next: writ --station wit-next start playout)
+                   producers                         (on the Halo: writ --station wit-next start producers)
   Groups:          core  content  all  stations
 
 EOF

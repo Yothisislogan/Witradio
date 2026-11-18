@@ -198,6 +198,9 @@ class Plan:
                     "gain_db": w.gain_db or 0.0,
                     "lossless": w.lossless,
                     "files": [f.path for f in w.files],
+                    "composition_year": w.composition_year,
+                    "form": w.form,
+                    "parts": [f.part_title for f in w.files if getattr(f, "part_title", None)],
                 })
             if e.about:
                 data["about"] = e.about

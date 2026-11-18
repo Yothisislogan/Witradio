@@ -185,6 +185,20 @@ class DirectorTests(unittest.TestCase):
         self.assertLessEqual(roomtone.seconds, 30)
         self.assertTrue(Path(roomtone.path).exists())
 
+    def test_plan_ahead_tells_the_halo_what_is_unlocked(self):
+        director = self.director()
+        status = director.plan_ahead(36, now=datetime(2026, 11, 18, 8, 0, tzinfo=ET))
+        self.assertTrue(status["unlocked"]["classical_day_shift"])  # WRIT_FORCE_CLASSICAL=1
+        self.assertIn("nocturne", status["unlocked"])
+        on_disk = json.loads((self.station.output_dir / "buffer" / "plans" / "_status.json").read_text())
+        self.assertEqual(on_disk["unlocked"], status["unlocked"])
+        for plan_id in status["planned"]:
+            self.assertTrue((self.station.output_dir / "buffer" / "plans" / f"{plan_id}.json").exists())
+        os.environ.pop("WRIT_FORCE_CLASSICAL")  # 510 s of music: nothing unlocks
+        status = director.plan_ahead(36, now=datetime(2026, 11, 18, 8, 0, tzinfo=ET))
+        self.assertFalse(any(status["unlocked"].values()))
+        self.assertEqual(status["planned"], [])
+
     def test_host_is_credited_on_talk_only(self):
         music = Item(kind="safe", path="/a.flac", seconds=1, title="Night Drive", host="wit", entry_id="e")
         talk = Item(kind="talk", path="/b.flac", seconds=1, title="Back announce", host="count", entry_id="f")
