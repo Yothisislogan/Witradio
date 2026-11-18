@@ -1,0 +1,55 @@
+# Data feeds for The Market and Ying & Yang (show bible: data sources).
+#
+# cleared_for_air: set it true only once a provider's terms allow on-air
+# use. The Market and Ying & Yang fail closed: if any fact in a segment came
+# from a provider that isn't cleared, the segment is rehearsed into
+# runtime/rehearsal/ and never reaches the buffer.
+
+sports:
+  provider: espn
+  # Leagues in season are picked up automatically; empty days are skipped.
+  leagues: [nfl, college-football, nba, nhl, mens-college-basketball, wnba, mlb]
+  news_limit: 8
+  providers:
+    espn:
+      cleared_for_air: false
+      credit: "ESPN"
+      note: >-
+        ESPN's public site API: unofficial, with no license for broadcast use.
+        Good for rehearsing the show. Air needs a licensed scores feed (the
+        bible: "The scores feed's terms must allow broadcast use").
+
+markets:
+  providers:
+    fred:
+      api_key_env: FRED_API_KEY
+      cleared_for_air: true
+      credit: "Federal Reserve Bank of St. Louis"
+    fred_third_party:
+      cleared_for_air: false
+      credit: "S&P Dow Jones Indices, Nasdaq and Freddie Mac via FRED"
+      note: >-
+        FRED republishes these series under their owners' copyright. Clear
+        them with the owners, or take closes from a licensed vendor.
+    treasury:
+      cleared_for_air: true
+      credit: "U.S. Treasury"
+    bls:
+      api_key_env: BLS_API_KEY
+      cleared_for_air: true
+      credit: "Bureau of Labor Statistics"
+    fed_press:
+      cleared_for_air: true
+      credit: "Federal Reserve Board"
+
+  # FRED series. third_party: true means the values belong to someone else.
+  series:
+    SP500: {name: "S&P 500", kind: index, third_party: true}
+    DJIA: {name: "Dow Jones Industrial Average", kind: index, third_party: true}
+    NASDAQCOM: {name: "Nasdaq Composite", kind: index, third_party: true}
+    DCOILWTICO: {name: "WTI crude oil", kind: price, unit: "dollars a barrel"}
+    MORTGAGE30US: {name: "30-year fixed mortgage rate", kind: rate, third_party: true}
+    CPIAUCSL: {name: "Consumer price index", kind: yoy}
+    UNRATE: {name: "Unemployment rate", kind: rate}
+    PAYEMS: {name: "Nonfarm payrolls", kind: monthly_change, unit: "thousand jobs"}
+    RSAFS: {name: "Retail sales", kind: monthly_pct}

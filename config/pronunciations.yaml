@@ -1,0 +1,63 @@
+# Respellings for the voice engines (show bible: voice cards). Open models
+# stumble on hard names, so the text sent to an engine is respelled first.
+# Scripts, credits, now-playing and the fact check keep the real spelling.
+# Whole words only; the longest match wins. Composers first.
+
+global:
+  Dvořák: DVOR-zhahk
+  Dvorak: DVOR-zhahk
+  Saint-Saëns: san-SAHNS
+  Saint-Saens: san-SAHNS
+  Mussorgsky: moo-SORG-skee
+  Chopin: SHOW-pan
+  Janáček: YAH-nah-chek
+  Rachmaninoff: rahk-MAH-nih-noff
+  Tchaikovsky: chy-KOFF-skee
+  Rimsky-Korsakov: RIM-skee KOR-sah-koff
+  Haydn: HY-dn
+  Liszt: LIST
+  Bizet: bee-ZAY
+  Fauré: foh-RAY
+  Debussy: deh-byoo-SEE
+  Ravel: rah-VEL
+  Borodin: bor-oh-DEEN
+  Glinka: GLINK-uh
+  Smetana: SMEH-tah-nah
+  Sibelius: sih-BAY-lee-us
+  Grieg: GREEG
+  Mahler: MAH-ler
+  Bruckner: BROOK-ner
+  Wagner: VAHG-ner
+  Mendelssohn: MEN-del-sun
+  Schubert: SHOO-bert
+  Schumann: SHOO-mahn
+  Beethoven: BAY-toh-ven
+  Telemann: TAY-leh-mahn
+  Couperin: koo-PRAN
+  Rameau: rah-MOH
+  Lully: loo-LEE
+  Albéniz: ahl-BAY-neeth
+  Granados: grah-NAH-dohs
+  Suk: SOOK
+  Fibich: FIB-ikh
+  Ishizaka: ee-shee-ZAH-kah
+  Bösendorfer: BUR-zen-dor-fer
+  Leipzig: LIPE-tsig
+  Köthen: KUR-ten
+  Goldberg: GOLD-berg
+
+# Expanded wherever they appear (catalog numbers and markets shorthand).
+abbreviations:
+  "Op.": Opus
+  "No.": Number
+  "Nos.": Numbers
+  "BWV": B W V
+  "WoO": W o O
+  "S&P": S and P
+  "FOMC": F O M C
+  "CPI": C P I
+  "GDP": G D P
+  "Q&A": Q and A
+
+# Per-host additions, e.g. insurance terms for Professor Ex.
+hosts: {}

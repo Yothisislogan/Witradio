@@ -1,0 +1,120 @@
+# Voice cards for the hosts (show bible: Local AI stack). Every engine runs
+# on the Halo. Each one sits behind a small server that speaks the
+# OpenAI-compatible speech API (POST <base_url>/audio/speech, returning WAV),
+# or behind a command that writes a WAV. The ports are suggestions: point
+# them wherever you run each engine. Reference clips live in WRIT_VOICES_DIR
+# (default ~/.writ/voices).
+#
+# style says how a voice-script line is translated for the engine:
+#   qwen3       emotion, pace and the card's delivery become "instructions"
+#   chatterbox  intensity becomes "exaggeration"; nonverbals become tags
+#   dia         consecutive lines of its two speakers render together as [S1]/[S2]
+#   dramabox    each line becomes a screenplay line: NAME (emotion): text
+#   plain       text only (Kokoro)
+#
+# If a host's engine fails, that host's lines fall back to the card's
+# fallback (Kokoro, which runs on the CPU), so a segment still gets made.
+
+engines:
+  qwen3:
+    transport: openai
+    base_url: http://127.0.0.1:8881/v1
+    model: qwen3-tts
+    style: qwen3
+  chatterbox:
+    transport: openai
+    base_url: http://127.0.0.1:8882/v1
+    model: chatterbox
+    style: chatterbox
+    nonverbal_format: "[{tag}]"
+  dia:
+    transport: openai
+    base_url: http://127.0.0.1:8883/v1
+    model: dia
+    style: dia
+    nonverbal_format: "({tag})"
+    max_dialogue_words: 70
+  dramabox:
+    transport: command
+    # Any command that reads {text_file} and writes a WAV to {out}.
+    command: "dramabox-tts --text-file {text_file} --reference {reference} --out {out}"
+    style: dramabox
+  kokoro:
+    transport: kokoro
+    style: plain
+
+voices:
+  count:
+    engine: chatterbox
+    voice: count
+    reference: count.wav
+    delivery: "slow, velvet, old-world, faintly amused, never shouts"
+    nonverbals: [chuckle, sigh]
+    words_per_second: 2.2
+    fallback: {engine: kokoro, voice: bm_george}
+  dottie:
+    engine: qwen3
+    voice: dottie
+    reference: dottie.wav
+    delivery: "brisk, wry, Midwestern, calmest when the market isn't"
+    words_per_second: 2.7
+    fallback: {engine: kokoro, voice: af_sarah}
+  ying:
+    engine: dia
+    voice: S1
+    reference: ying.wav
+    delivery: "loud, fast, sports-radio rasp, always on the edge of yelling"
+    nonverbals: [laughs, sighs, groans, shouts]
+    words_per_second: 3.0
+    fallback: {engine: kokoro, voice: am_puck}
+  yang:
+    engine: dia
+    voice: S2
+    reference: yang.wav
+    delivery: "soft, slow, unbothered, warm and a little smug"
+    nonverbals: [laughs, sighs, chuckles]
+    words_per_second: 2.3
+    fallback: {engine: kokoro, voice: am_michael}
+  wit:
+    engine: chatterbox
+    voice: wit
+    reference: wit.wav
+    delivery: "big, round, friendly, bouncy, goofy, full of wonder"
+    nonverbals: [laugh, gasp]
+    words_per_second: 2.6
+    fallback: {engine: kokoro, voice: am_fenrir}
+  steve:
+    engine: qwen3
+    voice: steve
+    reference: steve.wav
+    delivery: "warm, quick, delighted, a librarian who loves what he's showing you"
+    words_per_second: 2.7
+    fallback: {engine: kokoro, voice: am_eric}
+  professor_ex:
+    engine: qwen3
+    voice: professor_ex
+    reference: professor_ex.wav
+    delivery: "measured, warm and dry, slight Southern lilt, pauses before the punchline"
+    words_per_second: 2.4
+    fallback: {engine: kokoro, voice: bm_lewis}
+  hushworth:
+    engine: dramabox
+    voice: hushworth
+    reference: hushworth.wav
+    delivery: "rich, theatrical, from booming to a whisper"
+    words_per_second: 2.2
+    fallback: {engine: kokoro, voice: bm_fable}
+  logan:
+    engine: chatterbox
+    voice: logan
+    reference: logan.wav
+    delivery: "encouraging, steady"
+    words_per_second: 2.6
+    fallback: {engine: kokoro, voice: am_liam}
+  station:
+    engine: qwen3
+    voice: station
+    reference: station.wav
+    delivery: "clear, confident, crisp diction, a slight smile"
+    words_per_second: 2.6
+    fallback: {engine: kokoro, voice: af_heart}
