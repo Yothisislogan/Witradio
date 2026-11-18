@@ -202,6 +202,21 @@ class RotationTests(unittest.TestCase):
         main = next(e for e in p.works() if e.role == "main_event")
         self.assertEqual(main.work.id, keep.id)
 
+    def test_two_recordings_of_one_composition_rotate_as_one_work(self):
+        def recording(work_id, performer):
+            w = make_work(work_id, 12.5, "Frederic Chopin", "ballade")
+            return w.__class__(**{**w.__dict__, "title": "Ballade No. 1 in G minor, Op. 23", "performer": performer})
+
+        first, second = recording(9101, "Pianist A"), recording(9102, "Pianist B")
+        library = list(self.library) + [first, second]
+        self.assertEqual(first.key, second.key)
+        aired = [Play(first.id, self.start - timedelta(days=2), first.composer, None)]
+        for _ in range(3):
+            p = plan("nocturne", "nocturne", self.start, 6 * 3600, library, plays=aired)
+            self.assertFalse({9101, 9102} & {e.work.id for e in p.works()})
+        p = plan("nocturne", "nocturne", self.start, 6 * 3600, library)
+        self.assertLessEqual(len({9101, 9102} & {e.work.id for e in p.works()}), 1)
+
     def test_composer_heard_just_before_the_block_waits(self):
         p0 = plan("nocturne", "nocturne", self.start, 6 * 3600, self.library)
         composer = p0.works()[0].work.composer

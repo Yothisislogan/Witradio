@@ -237,7 +237,11 @@ def _after(start: datetime, seconds: float) -> datetime:
 class History:
     """Past and scheduled airings, indexed for the rotation rules."""
 
-    def __init__(self, plays: Iterable[Play]):
+    def __init__(self, plays: Iterable[Play], keys: dict[int, str] | None = None):
+        # keys maps work ids to work_key(): two recordings of one composition
+        # rotate as one work.
+        self.keys = dict(keys or {})
+        self.by_key: dict[str, list[datetime]] = defaultdict(list)
         self.by_work: dict[int, list[datetime]] = defaultdict(list)
         self.main_events: dict[int, list[datetime]] = defaultdict(list)
         self.by_composer: dict[str, list[datetime]] = defaultdict(list)
@@ -246,6 +250,8 @@ class History:
         for play in plays:
             at = play.at if play.at.tzinfo else play.at.replace(tzinfo=timezone.utc)
             self.by_work[play.work_id].append(at)
+            if play.work_id in self.keys:
+                self.by_key[self.keys[play.work_id]].append(at)
             if play.role == "main_event":
                 self.main_events[play.work_id].append(at)
             if play.composer:
@@ -258,7 +264,12 @@ class History:
         return any(abs((t - at).total_seconds()) < seconds for t in times)
 
     def work_recent(self, work_id: int, at: datetime, days: float) -> bool:
-        return days > 0 and self._near(self.by_work.get(work_id, []), at, days * 86400)
+        if days <= 0:
+            return False
+        if self._near(self.by_work.get(work_id, []), at, days * 86400):
+            return True
+        key = self.keys.get(work_id)
+        return bool(key) and self._near(self.by_key.get(key, []), at, days * 86400)
 
     def main_event_recent(self, work_id: int, at: datetime, days: float) -> bool:
         return days > 0 and self._near(self.main_events.get(work_id, []), at, days * 86400)
@@ -471,7 +482,7 @@ class BlockPlanner:
     # ── rules ──
 
     def allowed(self, work: Work, start: float, role: str) -> bool:
-        if work.id in self.used:
+        if work.id in self.used or work.key in {w.key for _, w in self.placed}:
             return False
         at = self.abs_time(start)
         if self.history.work_recent(work.id, at, self.rules.work_repeat_days):
@@ -850,8 +861,8 @@ def plan_block(
     """Plan one classical block from an already-cleared library."""
     if block_type not in TEMPLATES:
         raise ValueError(f"Unknown classical block {block_type!r}")
-    history = History(plays)
     lossless = [w for w in library if w.lossless and w.kind == "classical"]
+    history = History(plays, keys={w.id: w.key for w in library})
     if len(lossless) < len(library):
         dropped = len(library) - len(lossless)
         # The caller should only pass cleared works; this is the last guard.
