@@ -8,9 +8,11 @@ WIT-FM is moving from four dayparts to eight shows (show bible and development
 plan, November 2026). The new station is built beside the live one as
 `wit-next` on `/next` and replaces `/stream` at the Phase 3 cutover. Start with
 [docs/live-setup.md](docs/live-setup.md): the Phase 0 runbook (rotating the
-Icecast passwords, snapshotting the server, the `/next` test loop) and a map of
-the new pieces: the format-hours schedule, the catalog, the classical fill
-planner and the OpenAI-compatible LLM client.
+Icecast passwords, snapshotting the server, the `/next` test loop) and the
+Phase 1 guide. Phase 1 covers the Liquidsoap playout (Ogg FLAC on
+`/lossless`, MP3 on `/next`, fallbacks, SMS alerts), the script that pulls the
+bible's cleared classical recordings into the catalog, the format-hours
+schedule, the classical fill planner and the OpenAI-compatible LLM client.
 
 ## What is this?
 
@@ -260,8 +262,20 @@ The listener daemon polls for new messages every 30 seconds and generates spoken
 ├── writ                        # Station CLI (start/stop/status/logs/generate)
 ├── run_operator.sh             # Single operator run (station agent, with lock + timeout)
 ├── config/stations.yaml        # Station instances, mounts, API ports, agents, paths
+├── config/wit_next_schedule.yaml  # wit-next: the overhaul's format-hours grid (Eastern)
+├── config/music_sources.yaml   # wit-next: cleared classical sources for the music pull
+├── liquidsoap/wit_next.liq     # wit-next playout: /lossless FLAC + /next MP3, fallbacks
+├── tools/pull_music.py         # Pull cleared music into the library and catalog
 ├── mac/
 │   ├── station_config.py        # Station config resolver and env exporter
+│   ├── playout_director.py     # wit-next: decides each item for Liquidsoap
+│   ├── playout.sh              # wit-next: runs the director and Liquidsoap
+│   ├── playout_monitor.py      # wit-next: outside health checks, listener log
+│   ├── alerts.py               # SMS alerts through Twilio
+│   ├── catalog.py              # Music catalog: licenses, gain, airplay audit
+│   ├── classical_planner.py    # Classical block planner and rotation rules
+│   ├── music_library.py        # Download, check and catalogue music sources
+│   ├── llm_client.py           # OpenAI-compatible LLM client (the Halo)
 │   ├── feeder.py               # Playlist feeder (manages ezstream + API)
 │   ├── radio.xml               # Legacy ezstream config; station configs generate runtime configs
 │   ├── api_server.py           # Now-playing API (daemon thread in feeder)
@@ -299,6 +313,7 @@ The listener daemon polls for new messages every 30 seconds and generates spoken
 - Python 3.11+
 - ffmpeg, ezstream, vorbis-tools
 - Icecast2
+- Liquidsoap 2.2+ (the wit-next playout; `apt install liquidsoap` on Ubuntu 24.04)
 - Claude CLI and/or Codex CLI (for station agents)
 - Kokoro TTS (~200MB model)
 - music-gen.server + ACE-Step (optional, for AI music tracks)

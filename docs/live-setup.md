@@ -1,9 +1,10 @@
-# WIT-FM: live setup and Phase 0 runbook
+# WIT-FM: live setup, Phase 0 and Phase 1 runbook
 
 Written November 18, 2026, for Phase 0 of the overhaul (development plan:
 "Secure and baseline", Nov 17-23). It covers the server steps the code can't
 do: rotating the passwords, snapshotting the server, writing down what
-actually runs, and passing the Phase 0 gate.
+actually runs, and passing the Phase 0 gate. Section 6 covers Phase 1: the
+Liquidsoap playout, SMS alerts and stocking the music library.
 
 Section 3 describes the live station **as the repository describes it**. The
 server may run changes that were never committed, so every row lists the
@@ -217,13 +218,23 @@ and the Halo answers over Tailscale.**
    python3 tools/next_test_loop.py --remove
    ```
 
-## 6. What this branch adds for Phase 1
+## 6. Phase 1: the Liquidsoap playout
+
+Decided November 18: the playout runs on Liquidsoap. One 16-bit/44.1 kHz
+master feeds two outputs, encoded in parallel: `/lossless` (Ogg FLAC) and
+`/next` (MP3 320 kbps; `/stream` at the cutover). The YouTube relay reads
+`/next`.
 
 | Piece | File | Try it |
 |---|---|---|
 | Format-hours grid, pinned to Eastern | `config/wit_next_schedule.yaml` | `python3 mac/schedule.py --schedule config/wit_next_schedule.yaml week` |
 | Catalog: licenses, years, lossless flag, one gain per work, airplay audit, permissions log, dispute notes | `mac/catalog.py` | `python3 mac/catalog.py --help` |
+| Music pull from the bible's cleared sources | `tools/pull_music.py`, `config/music_sources.yaml` | `python3 tools/pull_music.py sources` |
 | Classical fill planner and rotation rules | `mac/classical_planner.py` | `python3 mac/classical_planner.py --at "2026-11-18 23:00"` |
+| Playout master: outputs, gain, fallbacks, silence detection | `liquidsoap/wit_next.liq` | `./writ --station wit-next start playout` |
+| Director: what plays next, now-playing, airplay log | `mac/playout_director.py` | `python3 mac/playout_director.py status` |
+| SMS alerts through Twilio | `mac/alerts.py` | `python3 mac/alerts.py test` |
+| Outside monitor and listener log | `mac/playout_monitor.py` | `python3 mac/playout_monitor.py once` |
 | One OpenAI-compatible LLM client | `mac/llm_client.py` | `python3 mac/llm_client.py --station wit-next -p "Say hello"` |
 
 The catalog for `wit-next` lives at `~/.writ/stations/wit-next/catalog.db`.
@@ -231,15 +242,197 @@ Classical blocks stay locked until it holds 100 h of cleared lossless
 classical (Nocturne, Evening Concert), then 200 h (Day Shift) and 300 h
 (Matinee, Concert Hall). Until then their slots run Monster Mix.
 
+### 6.1 Install and start
+
+1. Install Liquidsoap 2.2 or newer. Ubuntu 24.04 packages 2.2.4:
+
+   ```bash
+   sudo apt install liquidsoap
+   ```
+
+2. Raise Icecast's `<sources>` to 8 and add the `/lossless` mount, as in
+   `config/icecast.xml.example`.
+
+3. Run the gate test against the installed Liquidsoap (section 6.3).
+
+4. Start the playout. `playout` runs Liquidsoap and the director together,
+   and restarts the director if it dies. It refuses to start while the
+   Phase 0 test loop (`stream`) holds `/next`, so stop that first:
+
+   ```bash
+   ./writ --station wit-next stop stream
+   ```
+
+   ```bash
+   ./writ --station wit-next start playout
+   ```
+
+   ```bash
+   ./writ --station wit-next start station-api
+   ```
+
+   ```bash
+   ./writ --station wit-next start monitor
+   ```
+
+5. Check it:
+
+   ```bash
+   ./writ --station wit-next logs playout
+   ```
+
+   ```bash
+   curl -s localhost:8002/now-playing
+   ```
+
+### 6.2 What plays, and what happens when something fails
+
+Liquidsoap asks the director for every item over localhost HTTP (port
+8102: the station API port plus 100). In a classical block the director
+plays the planner's plan: each work at its catalog gain, movements back to
+back, 2-4 s of digital silence between works, a station ID at the hour,
+and the host's links from `buffer/talk/<plan>/` once Phase 2 renders them.
+Running late, it drops the fit pieces and won't start a work that would
+overrun the post by more than a minute. If the plan runs short, it fills
+with a one-movement classical work that ends before the post, else a
+safe-library track that fits, else inaudible room tone. Monster
+Mix, and classical blocks still under their hours, play the show's buffer
+(`buffer/<show>/<slot>/`), then the safe library.
+
+If the director stops answering, Liquidsoap falls back on its own: safe
+library (`library/air/safe`), then station IDs (`library/ids`), then
+silence.
+After 20 s below -60 dBFS it texts, and texts again when audio returns.
+The monitor watches from outside: both mounts on Icecast, the program
+moving, an 8-second silence sample of `/next`, the buffer under
+`WRIT_BUFFER_ALERT_HOURS` (default 12, once it has filled) and, when
+`WRIT_LLM_BASE_URL` is set, the Halo. It logs listener counts per mount
+and show to `runtime/playout/listeners.db`.
+
+To rehearse classical blocks on `/next` before the catalog has the hours,
+start the playout with `WRIT_FORCE_CLASSICAL=1` in the shell. `writ`
+clears it again on a start without it.
+
+### 6.3 The lossless branch and the gate test
+
+A FLAC at unity gain comes out of `/lossless` bit for bit. There is one
+exception: Liquidsoap carries samples as floats, so the value -32768 airs
+as -32767 (1 LSB, at negative full scale). Works whose catalog gain isn't
+0 dB air at that one fixed gain, with no fades, compression or limiting.
+
+The FLAC stream carries no per-track titles. Liquidsoap 2.2.4's Ogg FLAC
+encoder segfaults when a title change starts a new Ogg chain. Titles,
+credits, license and a lossless flag reach the player and apps through
+the now-playing API, which the director writes as each item starts. The
+MP3 mount keeps its stream titles.
+
+The gate test runs the real `liquidsoap/wit_next.liq` against the
+installed Liquidsoap, writing to files, for about 35 s. It checks the
+bit-for-bit unity work, the -6 dB gain to within 1 LSB, exact gap lengths,
+movements back to back, fallback to the safe library, the director
+callbacks, and that sixteen short titled tracks don't crash the encoder.
+Run it on the playout host after any Liquidsoap install or upgrade:
+
+```bash
+python3 -m pytest tests/test_playout_liquidsoap.py -v
+```
+
+Icecast passes the Ogg pages through untouched: in rehearsal, a recording
+of `/lossless` from Icecast matched the source file's SHA-256.
+
+### 6.4 SMS alerts
+
+Set these where `writ` is started from, never in the repository:
+
+| Variable | Value |
+|---|---|
+| `TWILIO_ACCOUNT_SID` | `AC...` |
+| `TWILIO_AUTH_TOKEN`, or `TWILIO_API_KEY` and `TWILIO_API_SECRET` | An API key is better for production |
+| `TWILIO_MESSAGING_SERVICE_SID` or `TWILIO_FROM` | A Messaging Service (`MG...`, recommended) or a Twilio number in E.164 (`+15551234567`) |
+| `WRIT_ALERT_SMS_TO` | One or more E.164 numbers, comma-separated |
+
+Without them, alerts go to `runtime/playout/alerts.jsonl` and nothing is
+sent. Each problem texts at most once every 30 minutes, then once when it
+clears. Carriers block texts from unregistered US long codes (Twilio error
+30034), so register the number for A2P 10DLC, or use a verified toll-free
+number. Send a test:
+
+```bash
+python3 mac/alerts.py --station wit-next test
+```
+
+### 6.5 Stocking the library
+
+1. **Safe library.** Everything that airs must be catalogued: the airplay
+   audit (`python3 mac/catalog.py audit`) flags any file that isn't, and a
+   clean audit is a Phase 3 gate. Add the generated safe tracks through the
+   catalog as the source named `safe`. Their air copies land in
+   `library/air/safe/`, where the director and Liquidsoap read them:
+
+   ```bash
+   python3 tools/pull_music.py local ~/safe-tracks --source safe --kind generated --license generated --credit "Generated for WIT-FM"
+   ```
+
+   The same rule will apply to the Phase 2 producers: tracks they put in
+   the buffer need catalog entries. Station IDs in `library/ids/` and
+   talk are not logged as airplay.
+
+2. **The bible's Internet Archive sets.** List them, see what each holds,
+   then fetch:
+
+   ```bash
+   python3 tools/pull_music.py sources
+   ```
+
+   ```bash
+   python3 tools/pull_music.py fetch all --dry-run
+   ```
+
+   ```bash
+   python3 tools/pull_music.py fetch all
+   ```
+
+   ```bash
+   python3 tools/pull_music.py report
+   ```
+
+   They come to about 35 hours: Open Goldberg Variations 1.4 h, Open
+   Well-Tempered Clavier Book 1 1.8 h, Kimiko Ishizaka's Art of the Fugue
+   1.3 h, Musopen's Chopin 13.6 h and the Musopen Kickstarter set 16.7 h.
+   Each download is checked against the Archive's MD5. Each file gets a
+   spectrogram check for fake lossless, and each work one gain (EBU R128
+   across its movements, toward -18 LUFS, capped by true peak). Masters are
+   kept; the air copies are 16-bit/44.1 kHz FLAC.
+
+   Some works arrive quarantined until someone checks them. The Art of the
+   Fugue set's license needs confirming, and 40 Chopin works (1.95 h) look
+   posthumously published. The report in `library/reports/<source>.yaml`
+   lists each work with its reason. It also notes the Kickstarter set's
+   Borodin quartets, credited to an orchestra, and Suk (died 1935). Fix
+   details with `python3 mac/catalog.py edit`, then put a checked source on
+   air:
+
+   ```bash
+   python3 tools/pull_music.py approve musopen-chopin --reason publication
+   ```
+
+3. **Musopen site downloads and Marine Band CDs** make up the rest of the
+   first 100 hours. Add a folder of lossless files per source, for example:
+
+   ```bash
+   python3 tools/pull_music.py local ~/rips/marine-band --source marine-band --license public_domain --credit "United States Marine Band" --grouping album --dry-run
+   ```
+
+   Drop `--dry-run` once the works look right. Recordings must be published
+   in 1925 or earlier, or carry a CC0 or public-domain grant (Musopen,
+   Marine Band). Compositions must date from 1930 or earlier. The intake
+   checks both and quarantines what it can't confirm.
+
 ## 7. Decisions due by the end of Phase 0
 
-From the development plan. The first one decides how the rest of Phase 1 is
-built:
+From the development plan:
 
-1. **Playout engine.** Liquidsoap (recommended: schedules, fallbacks,
-   silence detection, several outputs, FLAC with metadata), or keep ezstream
-   and `feeder.py` with a second encoder chain for lossless. The planner's
-   JSON output (files, gain, gaps, credits) feeds either one.
+1. **Playout engine.** Decided November 18: Liquidsoap (section 6).
 2. **Playout host.** Stay on Oracle or finish the Hetzner move. Each lossless
    listener uses about 0.3 GB an hour.
 3. **Where the Halo lives,** home or office. The less reliable the link, the
