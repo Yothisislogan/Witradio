@@ -16,6 +16,7 @@
 #   Public API:      api
 #   Content:         music-gen, operator, listener
 #   Relays:          youtube
+#   Playout:         playout (Liquidsoap master), station-api (now-playing API)
 #   Groups:          core, content, all
 # ──────────────────────────────────────────────────────────────
 if (( BASH_VERSINFO[0] < 4 )); then
@@ -58,11 +59,12 @@ CORE_COMPONENTS=(icecast stream tunnel)
 API_COMPONENTS=(api)
 CONTENT_COMPONENTS=(music-gen operator listener)
 RELAY_COMPONENTS=(youtube)
-ALL_COMPONENTS=("${CORE_COMPONENTS[@]}" "${API_COMPONENTS[@]}" "${CONTENT_COMPONENTS[@]}" "${RELAY_COMPONENTS[@]}")
+PLAYOUT_COMPONENTS=(playout station-api monitor)
+ALL_COMPONENTS=("${CORE_COMPONENTS[@]}" "${API_COMPONENTS[@]}" "${CONTENT_COMPONENTS[@]}" "${RELAY_COMPONENTS[@]}" "${PLAYOUT_COMPONENTS[@]}")
 
 declare -A COMP_PORT=(
     [icecast]=8000 [stream]="$STATION_API_PORT" [tunnel]="" [api]="$PUBLIC_API_PORT" [youtube]=""
-    [music-gen]=4009 [operator]="" [listener]=""
+    [music-gen]=4009 [operator]="" [listener]="" [playout]="" [station-api]="$STATION_API_PORT" [monitor]=""
 )
 declare -A COMP_HEALTH_URL=(
     [icecast]="http://localhost:8000/status-json.xsl"
@@ -70,6 +72,7 @@ declare -A COMP_HEALTH_URL=(
     [api]="http://localhost:${PUBLIC_API_PORT}/health"
     [youtube]=""
     [music-gen]="http://localhost:4009/health" [operator]="" [listener]=""
+    [playout]="" [station-api]="http://localhost:${STATION_API_PORT}/health" [monitor]=""
 )
 declare -A COMP_PGREP=(
     [icecast]="icecast" [stream]="feeder.py"
@@ -77,10 +80,11 @@ declare -A COMP_PGREP=(
     [youtube]="mac/youtube_relay.sh|ffmpeg.*youtube.com/live2"
     [music-gen]="music.gen"
     [operator]="operator_daemon" [listener]="listener_daemon"
+    [playout]="liquidsoap.*wit_next.liq" [station-api]="mac/api_server.py" [monitor]="playout_monitor.py"
 )
 declare -A COMP_WAIT=(
     [icecast]=30 [stream]=10 [tunnel]=10 [api]=10
-    [youtube]=10 [music-gen]=180 [operator]=10 [listener]=10
+    [youtube]=10 [music-gen]=180 [operator]=10 [listener]=10 [playout]=20 [station-api]=10 [monitor]=5
 )
 
 # ── Colors ───────────────────────────────────────────────────
@@ -113,7 +117,7 @@ window_exists() {
 send_cmd() { local w="$1"; shift; tmux send-keys -t "$SESSION:$w" "$*" Enter; }
 
 is_station_scoped() {
-    case "$1" in stream|operator|listener|youtube) return 0 ;; *) return 1 ;; esac
+    case "$1" in stream|operator|listener|youtube|playout|station-api|monitor) return 0 ;; *) return 1 ;; esac
 }
 
 component_window() {
@@ -131,9 +135,24 @@ set_tmux_env_if_present() {
     fi
 }
 
+# Set it from this shell, or clear it in tmux when this shell doesn't have it,
+# so a switch like WRIT_FORCE_CLASSICAL can't linger in the session unseen.
+mirror_tmux_env() {
+    local name="$1"
+    if [[ -n "${!name:-}" ]]; then
+        tmux set-environment -t "$SESSION" "$name" "${!name}"
+    else
+        tmux set-environment -t "$SESSION" -u "$name" 2>/dev/null || true
+    fi
+}
+
 # ── health checks ────────────────────────────────────────────
 
 check_port()    { curl -sf --max-time 3 "$1" >/dev/null 2>&1; }
+mount_is_live() {
+    curl -sf --max-time 3 "http://localhost:8000/status-json.xsl" 2>/dev/null \
+        | grep -q "\"listenurl\":\"[^\"]*$1\""
+}
 check_process() { pgrep -f "$1" >/dev/null 2>&1; }
 listening_pids() {
     local port="$1"
@@ -149,6 +168,14 @@ is_healthy() {
     local url="${COMP_HEALTH_URL[$1]}" pat="${COMP_PGREP[$1]}"
     if [[ "$1" == "stream" ]]; then
         check_process "feeder.py --station ${STATION_ID}" && check_port "$url"
+        return
+    fi
+    if [[ "$1" == "playout" ]]; then
+        check_process "$pat" && mount_is_live "$STATION_MOUNT"
+        return
+    fi
+    if [[ "$1" == "station-api" ]]; then
+        check_port "$url"
         return
     fi
     if is_station_scoped "$1" && [[ "$1" != "stream" ]]; then
@@ -197,6 +224,9 @@ get_start_cmd() {
         tunnel)    echo "cloudflared tunnel run wvoid-radio" ;;
         api)       echo "cd '$PROJECT_ROOT' && WRIT_STATION_ID='$PUBLIC_API_STATION_ID' uv run python mac/api_server.py" ;;
         youtube)   echo "cd '$PROJECT_ROOT' && WRIT_STATION_ID='$STATION_ID' bash mac/youtube_relay.sh" ;;
+        playout)   echo "cd '$PROJECT_ROOT' && WRIT_STATION_ID='$STATION_ID' bash mac/playout.sh '$STATION_ID'" ;;
+        station-api) echo "cd '$PROJECT_ROOT' && WRIT_STATION_ID='$STATION_ID' uv run python mac/api_server.py" ;;
+        monitor)   echo "cd '$PROJECT_ROOT' && WRIT_STATION_ID='$STATION_ID' uv run python mac/playout_monitor.py --station '$STATION_ID' loop" ;;
         music-gen)
             [[ -z "$MUSIC_GEN_DIR" || ! -d "$MUSIC_GEN_DIR" ]] && \
                 { err "music-gen.server not found. Set MUSIC_GEN_DIR."; return 1; }
@@ -247,12 +277,17 @@ start_one() {
 
     # dependency checks
     case "$comp" in
-        stream)  is_healthy icecast   || { err "start icecast first"; return 1; } ;;
+        stream)  is_healthy icecast   || { err "start icecast first"; return 1; }
+                 check_process "$(printf '%s' "${COMP_PGREP[playout]}")" && mount_is_live "$STATION_MOUNT" && \
+                     { err "the Liquidsoap playout already owns $STATION_MOUNT; stop it first"; return 1; } ;;
+        playout) is_healthy icecast   || { err "start icecast first"; return 1; }
+                 check_process "feeder.py --station ${STATION_ID}" && \
+                     { err "the legacy feeder already owns $STATION_MOUNT; run: writ --station $STATION_ID stop stream"; return 1; } ;;
         youtube) is_healthy stream    || { err "start stream first"; return 1; } ;;
         operator) is_healthy music-gen || warn "music-gen is down; operator can still manage talk/messages" ;;
     esac
 
-    if [[ "$comp" == "stream" && -z "${!STATION_PASSWORD_ENV:-}" ]] && \
+    if [[ ( "$comp" == "stream" || "$comp" == "playout" ) && -z "${!STATION_PASSWORD_ENV:-}" ]] && \
         ! { tmux has-session -t "$SESSION" 2>/dev/null && \
             tmux show-environment -t "$SESSION" "$STATION_PASSWORD_ENV" >/dev/null 2>&1; }; then
         err "$STATION_PASSWORD_ENV is not set. Export the Icecast source password first."
@@ -263,12 +298,19 @@ start_one() {
     local port="${COMP_PORT[$comp]}"
     [[ -n "$port" ]] && kill_port "$port"
 
-    if [[ "$comp" == "stream" ]]; then
-        # The feeder reads the source password from its environment. tmux
+    if [[ "$comp" == "stream" || "$comp" == "playout" || "$comp" == "monitor" ]]; then
+        # The feeder and Liquidsoap read the source password from their environment. tmux
         # windows inherit the session environment, so copy it in and start
         # from a fresh window rather than an old shell without it.
         ensure_session
         set_tmux_env_if_present "$STATION_PASSWORD_ENV"
+        for var in TWILIO_ACCOUNT_SID TWILIO_AUTH_TOKEN TWILIO_API_KEY TWILIO_API_SECRET \
+                   TWILIO_MESSAGING_SERVICE_SID TWILIO_FROM WRIT_ALERT_SMS_TO \
+                   WRIT_BUFFER_ALERT_HOURS WRIT_LLM_BASE_URL WRIT_LLM_MODEL; do
+            set_tmux_env_if_present "$var"
+        done
+        # Staging only: opens the classical blocks before the catalog has the hours.
+        mirror_tmux_env WRIT_FORCE_CLASSICAL
         window_exists "$win" && tmux kill-window -t "$SESSION:$win" 2>/dev/null || true
     fi
 
@@ -374,7 +416,12 @@ cmd_stop() {
     case "$target" in
         ""|all)
             log "Stopping all..."
-            for c in youtube listener operator music-gen tunnel stream api icecast; do stop_one "$c"; done
+            stop_one youtube
+            # The wit-next playout: the monitor first, so stopping doesn't text anyone.
+            for c in monitor playout station-api; do
+                if window_exists "$(component_window "$c")"; then stop_one "$c"; fi
+            done
+            for c in listener operator music-gen tunnel stream api icecast; do stop_one "$c"; done
             local n; n=$(tmux list-windows -t "$SESSION" 2>/dev/null | wc -l | tr -d ' ')
             (( n <= 1 )) && { tmux kill-session -t "$SESSION" 2>/dev/null || true; } ;;
         core)    for c in tunnel stream icecast; do stop_one "$c"; done ;;
@@ -489,6 +536,7 @@ cmd_help() {
 
   Select station:  writ --station klod-fm start stream
   Components:      icecast  stream  tunnel  api  youtube  music-gen  operator  listener
+                   playout  station-api  monitor   (wit-next: writ --station wit-next start playout)
   Groups:          core  content  all  stations
 
 EOF

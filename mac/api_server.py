@@ -501,8 +501,20 @@ def get_messages(limit: int = 20) -> list[dict]:
 
 
 def get_now_playing() -> dict:
-    """Read current track info from shared in-memory state."""
+    """Read current track info from shared in-memory state.
+
+    Standalone (wit-next under Liquidsoap) there is no feeder in this process;
+    the playout director writes now_playing.json with the credit line and the
+    lossless flag, so serve that.
+    """
     data = dict(_track_info)
+    if not data.get("track") and STATION.now_playing_file.exists():
+        try:
+            on_disk = json.loads(STATION.now_playing_file.read_text())
+            if isinstance(on_disk, dict):
+                data = {**on_disk, **data}
+        except (OSError, json.JSONDecodeError):
+            pass
     data.setdefault("station_id", STATION.id)
     data.setdefault("station", STATION.call_sign)
     data.setdefault("mount", STATION.stream.mount)

@@ -231,6 +231,24 @@ class StationConfig:
         return Path(env).expanduser() if env else self.output_dir / "library"
 
     @property
+    def safe_dir(self) -> Path:
+        """The safe library: air copies of the catalog source named "safe"
+        (tools/pull_music.py local <folder> --source safe --kind generated ...)."""
+        env = os.environ.get("WRIT_SAFE_DIR")
+        return Path(env).expanduser() if env else self.library_dir / "air" / "safe"
+
+    @property
+    def ids_dir(self) -> Path:
+        """Station IDs: the last fallback before silence."""
+        env = os.environ.get("WRIT_IDS_DIR")
+        return Path(env).expanduser() if env else self.library_dir / "ids"
+
+    @property
+    def director_port(self) -> int:
+        """Localhost port of the playout director Liquidsoap talks to."""
+        return int(os.environ.get("WRIT_DIRECTOR_PORT") or self.stream.api_port + 100)
+
+    @property
     def catalog_db_path(self) -> Path:
         """License records, airplay log and permissions (mac/catalog.py)."""
         return self.home_dir / "catalog.db"
@@ -264,6 +282,11 @@ class StationConfig:
             "WRIT_ICECAST_HOST": self.stream.icecast_host,
             "WRIT_ICECAST_PORT": str(self.stream.icecast_port),
             "WRIT_ICECAST_MOUNT": self.stream.mount,
+            "WRIT_SOURCE_PASSWORD_ENV": self.stream.source_password_env,
+            "WRIT_LIBRARY_DIR": str(self.library_dir),
+            "WRIT_SAFE_DIR": str(self.safe_dir),
+            "WRIT_IDS_DIR": str(self.ids_dir),
+            "WRIT_DIRECTOR_PORT": str(self.director_port),
             "ICECAST_STATUS_URL": self.stream.status_url,
         }
 
