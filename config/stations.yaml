@@ -12,15 +12,12 @@ stations:
       output_dir: output
       home_dir: ~/.writ
       schedule_path: config/schedule.yaml
-      public_now_playing_paths:
-        - ~/GitHub/keltokhy.github.io/public/now_playing.json
     stream:
       icecast_host: localhost
       icecast_port: 8000
       mount: /stream
       api_port: 8001
       source_password_env: WRIT_SOURCE_PASSWORD
-      source_password: writ_source_2024
       stream_name: WIT Radio
       stream_genre: AI Radio
       stream_description: AI-powered radio from We Insure Things
@@ -42,7 +39,6 @@ stations:
       mount: /klod-fm
       api_port: 8011
       source_password_env: WRIT_SOURCE_PASSWORD
-      source_password: writ_source_2024
       stream_name: KLOD-FM
       stream_genre: AI Radio
       stream_description: Gemini-directed autonomous radio
@@ -62,7 +58,6 @@ stations:
       mount: /cdex-fm
       api_port: 8012
       source_password_env: WRIT_SOURCE_PASSWORD
-      source_password: writ_source_2024
       stream_name: CDEX-FM
       stream_genre: AI Radio
       stream_description: Codex directed autonomous radio

@@ -12,7 +12,7 @@ import argparse
 import json
 import os
 import shlex
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +21,13 @@ import yaml
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 CONFIG_PATH = PROJECT_ROOT / "config" / "stations.yaml"
 DEFAULT_STATION_ID = "writ-fm"
+# The Icecast source password is only ever read from the environment. The repo
+# is public, so a password written into config/stations.yaml is a published one.
+DEFAULT_SOURCE_PASSWORD_ENV = "WRIT_SOURCE_PASSWORD"
+
+
+class MissingSourcePasswordError(RuntimeError):
+    """Raised when a component needs the Icecast source password and it is unset."""
 
 
 def _expand_path(value: str | Path | None) -> Path | None:
@@ -50,16 +57,28 @@ class StreamConfig:
     icecast_port: int
     mount: str
     api_port: int
-    source_password: str
+    # repr=False keeps the password out of logs and tracebacks.
+    source_password: str = field(repr=False)
     stream_name: str
     stream_genre: str
     stream_description: str
     format: str = "Ogg"
     encoder: str = "oggenc-q4"
+    source_password_env: str = DEFAULT_SOURCE_PASSWORD_ENV
 
     @property
     def status_url(self) -> str:
         return f"http://{self.icecast_host}:{self.icecast_port}/status-json.xsl"
+
+    def require_source_password(self) -> str:
+        """Return the source password, or fail loudly if the environment lacks it."""
+        if not self.source_password:
+            raise MissingSourcePasswordError(
+                f"{self.source_password_env} is not set. Export the Icecast source "
+                f"password as {self.source_password_env} before starting the stream "
+                f"for mount {self.mount}."
+            )
+        return self.source_password
 
 
 @dataclass(frozen=True)
@@ -267,11 +286,14 @@ def load_station_config(station_id: str | None = None, path: Path = CONFIG_PATH)
     output_default = "output" if selected == DEFAULT_STATION_ID else f"output/stations/{selected}"
     home_default = "~/.writ" if selected == DEFAULT_STATION_ID else f"~/.writ/stations/{selected}"
 
-    source_password = ""
-    source_env = stream.get("source_password_env")
-    if source_env:
-        source_password = os.environ.get(str(source_env), "")
-    source_password = source_password or str(stream.get("source_password", "writ_source_2024"))
+    if "source_password" in stream:
+        raise ValueError(
+            f"Station '{selected}': stream.source_password must not be set in {path.name}. "
+            f"Remove it and export the password as the environment variable named by "
+            f"stream.source_password_env (default {DEFAULT_SOURCE_PASSWORD_ENV})."
+        )
+    source_env = str(stream.get("source_password_env") or DEFAULT_SOURCE_PASSWORD_ENV)
+    source_password = os.environ.get(source_env, "")
 
     public_paths = tuple(
         p for p in (_expand_path(value) for value in paths.get("public_now_playing_paths", []))
@@ -297,6 +319,7 @@ def load_station_config(station_id: str | None = None, path: Path = CONFIG_PATH)
             stream_description=str(stream.get("stream_description", "Autonomous AI radio")),
             format=str(stream.get("format", "Ogg")),
             encoder=str(stream.get("encoder", "oggenc-q4")),
+            source_password_env=source_env,
         ),
         output_dir=_expand_path(paths.get("output_dir", output_default)) or PROJECT_ROOT / output_default,
         home_dir=_expand_path(paths.get("home_dir", home_default)) or Path.home() / ".writ",

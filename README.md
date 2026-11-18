@@ -77,7 +77,9 @@ uv pip install kokoro soundfile
 cp config/icecast.xml.example config/icecast.xml
 cp mac/config.yaml.example mac/config.yaml
 
-# Edit mac/config.yaml — set Icecast password (must match icecast.xml)
+# The station runtime reads the Icecast source password from the environment
+# only. It must match <source-password> in config/icecast.xml. Never commit it.
+export WRIT_SOURCE_PASSWORD='...'
 ```
 
 ### 4. Start the station

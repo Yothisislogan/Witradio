@@ -35,9 +35,11 @@ def call_gemini(prompt: str, model: str) -> str:
     if not API_KEY:
         raise RuntimeError("Missing GEMINI_API_KEY environment variable")
 
+    # The key travels in a header, never in the URL, so it can't end up in
+    # proxy logs, shell history or error messages that echo the URL.
     url = (
         "https://generativelanguage.googleapis.com/v1beta/models/"
-        f"{model}:generateContent?key={API_KEY}"
+        f"{model}:generateContent"
     )
 
     payload = {
@@ -57,7 +59,7 @@ def call_gemini(prompt: str, model: str) -> str:
     request = urllib.request.Request(
         url,
         data=data,
-        headers={"Content-Type": "application/json"},
+        headers={"Content-Type": "application/json", "x-goog-api-key": API_KEY},
         method="POST",
     )
 

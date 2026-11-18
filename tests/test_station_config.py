@@ -42,7 +42,8 @@ class StationConfigTests(unittest.TestCase):
             self.assertNotEqual(getattr(klod, attr), getattr(cdex, attr), attr)
 
     def test_agent_assignment_matches_station_owner(self):
-        self.assertEqual(load_station_config("klod-fm").agent.kind, "claude")
+        # KLOD-FM moved to the Gemini wrapper with the rest of WIT Radio (May 2026).
+        self.assertEqual(load_station_config("klod-fm").agent.kind, "gemini")
         self.assertEqual(load_station_config("cdex-fm").agent.kind, "codex")
 
     def test_klod_inherits_writ_schedule_and_cdex_has_own_schedule(self):

@@ -22,7 +22,11 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(Path(__file__).parent))
-from station_config import apply_station_env, load_station_config  # noqa: E402
+from station_config import (  # noqa: E402
+    MissingSourcePasswordError,
+    apply_station_env,
+    load_station_config,
+)
 
 if "--station" in sys.argv:
     station_idx = sys.argv.index("--station")
@@ -617,7 +621,11 @@ def write_ezstream_config() -> Path:
     ezstream does not know about station instances, so the generated config is
     the handoff point: mount, metadata, and playlist intake all inherit the
     station environment from the feeder process.
+
+    The source password comes only from the environment (WRIT_SOURCE_PASSWORD
+    by default). The rendered file is written owner-only because it holds it.
     """
+    password = STATION.stream.require_source_password()
     RADIO_XML.parent.mkdir(parents=True, exist_ok=True)
     xml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <ezstream>
@@ -625,7 +633,7 @@ def write_ezstream_config() -> Path:
     <server>
       <hostname>{html.escape(STATION.stream.icecast_host)}</hostname>
       <port>{STATION.stream.icecast_port}</port>
-      <password>{html.escape(STATION.stream.source_password)}</password>
+      <password>{html.escape(password)}</password>
       <tls>None</tls>
       <reconnect_attempts>0</reconnect_attempts>
     </server>
@@ -680,7 +688,10 @@ def write_ezstream_config() -> Path:
   </encoders>
 </ezstream>
 """
-    RADIO_XML.write_text(xml)
+    fd = os.open(RADIO_XML, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as handle:
+        handle.write(xml)
+    os.chmod(RADIO_XML, 0o600)  # tighten a file left over from an older run
     return RADIO_XML
 
 
@@ -730,5 +741,9 @@ def start_ezstream() -> subprocess.Popen:
 
 if __name__ == "__main__":
     if "--start-ezstream" in sys.argv:
-        ezstream_proc = start_ezstream()
+        try:
+            ezstream_proc = start_ezstream()
+        except MissingSourcePasswordError as exc:
+            log(f"ERROR: {exc}")
+            raise SystemExit(2)
     run()

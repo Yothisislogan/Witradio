@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  WRIT-FM ezstream configuration
+  WRIT-FM ezstream configuration (legacy reference copy, not used at runtime)
+  feeder.py renders the live config per station at
+  $WRIT_RUNTIME_DIR/radio.xml, taking the source password from the
+  WRIT_SOURCE_PASSWORD environment variable. Never put a real password here:
+  this repository is public.
   Reads from a playlist file managed by the feeder.
   Send SIGHUP to reload the playlist after updates.
 -->
@@ -9,7 +13,7 @@
     <server>
       <hostname>localhost</hostname>
       <port>8000</port>
-      <password>writ_source_2024</password>
+      <password>SET_FROM_WRIT_SOURCE_PASSWORD</password>
       <tls>None</tls>
       <reconnect_attempts>0</reconnect_attempts>
     </server>
