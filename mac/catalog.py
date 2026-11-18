@@ -94,6 +94,8 @@ CREATE TABLE IF NOT EXISTS works (
     license_evidence TEXT,
     credit_line TEXT NOT NULL,
     tags TEXT NOT NULL DEFAULT '[]',
+    cycle TEXT,
+    cycle_no INTEGER,
     gain_db REAL,
     loudness_lufs REAL,
     true_peak_dbtp REAL,
@@ -226,6 +228,8 @@ class Work:
     source_url: str | None = None
     license_evidence: str | None = None
     tags: tuple[str, ...] = ()
+    cycle: str | None = None  # e.g. "beethoven_piano_sonatas", aired in cycle_no order
+    cycle_no: int | None = None
     gain_db: float | None = None
     loudness_lufs: float | None = None
     true_peak_dbtp: float | None = None
@@ -501,6 +505,8 @@ class Catalog:
         source_url: str | None = None,
         license_evidence: str | None = None,
         tags: Iterable[str] = (),
+        cycle: str | None = None,
+        cycle_no: int | None = None,
         gain_db: float | None = None,
         loudness_lufs: float | None = None,
         true_peak_dbtp: float | None = None,
@@ -523,14 +529,14 @@ class Catalog:
             cur = db.execute(
                 """INSERT INTO works (kind, title, composer, performer, form, year,
                        composition_year, source, source_url, license, license_evidence,
-                       credit_line, tags, gain_db, loudness_lufs, true_peak_dbtp,
-                       status, notes, added_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                       credit_line, tags, cycle, cycle_no, gain_db, loudness_lufs,
+                       true_peak_dbtp, status, notes, added_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     kind, title, composer, performer, form, year, composition_year,
                     source, source_url, license, license_evidence, credit_line.strip(),
                     json.dumps(sorted({t.strip().lower() for t in tags if t.strip()})),
-                    gain_db, loudness_lufs, true_peak_dbtp, status, notes, now,
+                    cycle, cycle_no, gain_db, loudness_lufs, true_peak_dbtp, status, notes, now,
                 ),
             )
             work_id = int(cur.lastrowid)
@@ -664,7 +670,7 @@ class Catalog:
             performer=row["performer"], form=row["form"], year=row["year"],
             composition_year=row["composition_year"], source_url=row["source_url"],
             license_evidence=row["license_evidence"], tags=tuple(json.loads(row["tags"] or "[]")),
-            gain_db=row["gain_db"], loudness_lufs=row["loudness_lufs"],
+            cycle=row["cycle"], cycle_no=row["cycle_no"], gain_db=row["gain_db"], loudness_lufs=row["loudness_lufs"],
             true_peak_dbtp=row["true_peak_dbtp"], status=row["status"], notes=row["notes"],
             added_at=row["added_at"], files=tuple(files),
         )
@@ -732,6 +738,27 @@ class Catalog:
                 work_id=row["work_id"], at=at, composer=row["composer"], role=row["role"]
             )
         return sorted(plays.values(), key=lambda p: p.at)
+
+    def cycle_positions(self) -> dict[str, int]:
+        """For each cycle, the cycle_no of its most recently aired or planned work.
+
+        Cycles run across many weeks, so this looks at all history rather than
+        the rotation window.
+        """
+        rows = self.db.execute(
+            """SELECT w.cycle AS cycle, w.cycle_no AS cycle_no, t.at AS at
+               FROM works w JOIN (
+                   SELECT work_id, aired_at AS at FROM airplay WHERE work_id IS NOT NULL
+                   UNION ALL
+                   SELECT work_id, starts_at AS at FROM scheduled
+               ) t ON t.work_id = w.id
+               WHERE w.cycle IS NOT NULL AND w.cycle_no IS NOT NULL
+               ORDER BY t.at"""
+        ).fetchall()
+        positions: dict[str, int] = {}
+        for row in rows:
+            positions[row["cycle"]] = row["cycle_no"]  # later rows win
+        return positions
 
     def cleared_hours(self, kind: str = "classical", today: date | None = None) -> float:
         """Hours of airable material of one kind (for classical: lossless only)."""
@@ -879,7 +906,8 @@ def intake(
 
 WORK_FIELDS = (
     "kind", "title", "composer", "performer", "form", "year", "composition_year",
-    "source", "source_url", "license", "license_evidence", "credit_line", "tags", "notes",
+    "source", "source_url", "license", "license_evidence", "credit_line", "tags",
+    "cycle", "cycle_no", "notes",
 )
 
 
@@ -949,6 +977,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     p_add.add_argument("--source-url")
     p_add.add_argument("--license-evidence")
     p_add.add_argument("--tag", action="append", default=[], dest="tags")
+    p_add.add_argument("--cycle", help="cycle aired in order, e.g. beethoven_piano_sonatas")
+    p_add.add_argument("--cycle-no", type=int, help="position in the cycle")
     p_add.add_argument("--no-spectral", action="store_true")
 
     p_import = sub.add_parser("import", help="add every work in a YAML manifest")
