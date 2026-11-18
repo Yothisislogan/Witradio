@@ -225,6 +225,34 @@ class FetchTests(unittest.TestCase):
         self.assertEqual(waltz.status, "quarantined")  # published 1955: needs a check
         self.assertIn("[verify-publication]", waltz.notes)
 
+    def test_safe_library_command_from_the_runbook(self):
+        # docs/live-setup.md 6.5: the generated safe library goes in through the
+        # catalog and lands in library/air/safe/, where the director and
+        # Liquidsoap look for it (StationConfig.safe_dir).
+        root = Path(self.tmp.name)
+        folder = root / "safe-tracks"
+        make_flac(folder / "Night Drive.flac", seconds=4, rate=44100, fmt="s16",
+                  tags={"title": "Night Drive", "artist": "WIT-FM"})
+        db = root / "catalog.db"
+        code = ml.main(["--db", str(db), "--library", str(self.library), "local", str(folder),
+                        "--source", "safe", "--kind", "generated", "--license", "generated",
+                        "--credit", "Generated for WIT-FM", "--jobs", "1"])
+        self.assertEqual(code, 0)
+        with Catalog(db) as catalog:
+            (work,) = catalog.works(status=None)
+            self.assertEqual((work.kind, work.status, work.license, work.credit_line),
+                             ("generated", "active", "generated", "Generated for WIT-FM"))
+            self.assertTrue(catalog.is_airable(work))
+            self.assertIsNotNone(work.gain_db)
+            air = Path(work.files[0].path)
+        self.assertTrue(air.is_relative_to(self.library / "air" / "safe"))
+        from mac.station_config import load_station_config
+
+        station = load_station_config("wit-next")
+        self.assertEqual(station.safe_dir, station.library_dir / "air" / "safe")
+        self.assertEqual(air.suffix, ".flac")
+        self.assertEqual(list(self.library.rglob("*.part")), [])
+
 
 class GroupingTests(unittest.TestCase):
     def test_folder_grouping_reads_musopen_title_tags(self):

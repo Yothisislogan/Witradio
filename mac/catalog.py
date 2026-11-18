@@ -489,14 +489,15 @@ def spectral_check(path: Path, seconds: float = 60.0) -> SpectralCheck:
 # ── the catalog ──────────────────────────────────────────────────────────────
 
 
-def default_db_path() -> Path:
+def default_db_path(station_id: str | None = None) -> Path:
     env = os.environ.get("WRIT_CATALOG_DB")
     if env:
         return Path(env).expanduser()
     sys.path.insert(0, str(PROJECT_ROOT / "mac"))
     from station_config import load_station_config
 
-    return load_station_config().catalog_db_path
+    # The catalog belongs to the overhaul station unless told otherwise.
+    return load_station_config(station_id or os.environ.get("WRIT_STATION_ID") or "wit-next").catalog_db_path
 
 
 class Catalog:
@@ -1037,7 +1038,8 @@ def _print_reports(reports: Iterable[IntakeReport]) -> int:
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="WIT-FM catalog")
-    parser.add_argument("--db", type=Path, help="catalog database (default: station catalog.db)")
+    parser.add_argument("--db", type=Path, help="catalog database (default: the station's catalog.db)")
+    parser.add_argument("--station", help="station whose catalog to use (default: wit-next)")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     p_add = sub.add_parser("add", help="add one work from its files")
@@ -1106,7 +1108,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     p_perm.add_argument("--work-id", type=int)
 
     args = parser.parse_args(argv)
-    with Catalog(args.db or default_db_path()) as catalog:
+    with Catalog(args.db or default_db_path(args.station)) as catalog:
         if args.cmd == "add":
             work = {k: getattr(args, k) for k in WORK_FIELDS if getattr(args, k, None) is not None}
             return _print_reports([intake(catalog, args.files, spectral=not args.no_spectral, **work)])

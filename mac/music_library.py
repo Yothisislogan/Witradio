@@ -346,6 +346,7 @@ class Source:
     work: dict[str, Any] = field(default_factory=dict)
     exclude: tuple[str, ...] = ()
     source_url: str | None = None
+    kind: str = "classical"  # or generated (the safe library), stacks, spoken...
 
     @property
     def url(self) -> str | None:
@@ -361,8 +362,8 @@ def load_sources(path: Path = SOURCES_PATH) -> dict[str, Source]:
     sources = {}
     for name, raw in (data.get("sources") or {}).items():
         raw = dict(raw or {})
-        if raw.get("license") not in ("cc0", "public_domain"):
-            raise LibraryError(f"{name}: license must be cc0 or public_domain")
+        if raw.get("license") not in ("cc0", "public_domain", "generated"):
+            raise LibraryError(f"{name}: license must be cc0, public_domain or generated")
         sources[name] = Source(
             name=name,
             license=raw["license"],
@@ -379,6 +380,7 @@ def load_sources(path: Path = SOURCES_PATH) -> dict[str, Source]:
             tags=tuple(raw.get("tags") or ()),
             work=dict(raw.get("work") or {}),
             exclude=tuple(raw.get("exclude") or ()),
+            kind=str(raw.get("kind", "classical")),
         )
     return sources
 
@@ -557,6 +559,15 @@ def describe(source: Source, title: str, tracks: list[Track], parts: list[str | 
     """Fill in composer, performer, form, tags, the composition year and review notes."""
     today = today or date.today()
     work = PlannedWork(source=source, title=title, tracks=tracks, parts=parts)
+    if source.kind == "generated":
+        # WIT-FM's own music: no composer or public-domain year to establish.
+        artists = collections.Counter(t.artist for t in tracks if t.artist)
+        work.performer = source.performer or (artists.most_common(1)[0][0] if artists else None)
+        work.composer = source.composer
+        work.tags = set(source.tags)
+        if source.verify:
+            work.quarantine.append(VERIFY_LICENSE)
+        return work
 
     # Composer: the source's fixed value, a composer tag, or the title tag's first segment.
     named = source.composer
@@ -687,7 +698,9 @@ def make_air_copy(master: Path, dest: Path) -> Path:
         return dest
     dest.parent.mkdir(parents=True, exist_ok=True)
     info = cat.probe(master)
-    tmp = dest.with_name(dest.name + ".tmp.flac")
+    # Not *.flac while it is being written: the director and Liquidsoap's
+    # watched safe-library playlist would see a half-written file.
+    tmp = dest.with_name(dest.name + ".part")
     if info.codec == "flac" and info.sample_rate == AIR_RATE and info.bit_depth == 16 and info.channels == 2:
         shutil.copyfile(master, tmp)
     else:
@@ -696,7 +709,7 @@ def make_air_copy(master: Path, dest: Path) -> Path:
                 "ffmpeg", "-y", "-v", "error", "-i", str(master), "-map", "0:a:0", "-map_metadata", "0",
                 "-af", f"aresample=osr={AIR_RATE}:osf=s16:resampler=soxr:precision=28:cutoff=0.97"
                        ":dither_method=triangular",
-                "-ac", "2", "-c:a", "flac", "-sample_fmt", "s16", "-compression_level", "8", str(tmp),
+                "-ac", "2", "-c:a", "flac", "-sample_fmt", "s16", "-compression_level", "8", "-f", "flac", str(tmp),
             ],
             capture_output=True, text=True, timeout=3600,
         )
@@ -734,7 +747,7 @@ def ingest(catalog: Catalog, work: PlannedWork, air_root: Path, *, jobs: int = 2
 
     cutoffs: list[float | None] = []
     for t in work.tracks:
-        if spectral:
+        if spectral and work.source.kind == "classical":
             check = cat.spectral_check(t.master)
             cutoffs.append(check.cutoff_hz)
             if check.verdict == "reject":
@@ -766,11 +779,13 @@ def ingest(catalog: Catalog, work: PlannedWork, air_root: Path, *, jobs: int = 2
     if work.composition_basis:
         notes.insert(0, f"composition year {work.composition_year}: {work.composition_basis}")
     work_id = catalog.add_work(
-        kind="classical", title=work.title, composer=work.composer, performer=work.performer,
+        kind=work.source.kind, title=work.title, composer=work.composer, performer=work.performer,
         form=work.form, year=work.source.year, composition_year=work.composition_year,
         source=work.source.name, source_url=work.source.url, license=work.source.license,
         license_evidence=work.source.license_evidence or None, credit_line=work.credit,
-        tags=sorted(work.tags), gain_db=cat.fixed_gain_db(lufs, peak),
+        tags=sorted(work.tags),
+        # Classical sits a little lower; WIT-FM's own music matches the pop shows.
+        gain_db=cat.fixed_gain_db(lufs, peak, target_lufs=-18.0 if work.source.kind == "classical" else -16.0),
         loudness_lufs=lufs if lufs != float("-inf") else None,
         true_peak_dbtp=peak if peak != float("-inf") else None,
         status="quarantined" if work.quarantine else "active",
@@ -909,7 +924,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     p_local = sub.add_parser("local", help="add a folder of lossless files (Musopen downloads, CD rips)")
     p_local.add_argument("folder", type=Path)
     p_local.add_argument("--source", required=True, help="a name for this source, e.g. musopen-site")
-    p_local.add_argument("--license", required=True, choices=("cc0", "public_domain"))
+    p_local.add_argument("--license", required=True, choices=("cc0", "public_domain", "generated"))
+    p_local.add_argument("--kind", default="classical", choices=("classical", "generated"),
+                         help="generated: WIT-FM's own music, e.g. the old station's safe library")
     p_local.add_argument("--credit", required=True, help='e.g. "{performer} via Musopen"')
     p_local.add_argument("--license-evidence", default="")
     p_local.add_argument("--source-url")
@@ -969,6 +986,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 title_from=args.title_from, verify=args.verify, composer=args.composer,
                 performer=args.performer, year=args.year, tags=tuple(args.tag),
                 source_url=args.source_url, description=f"local folder {args.folder}",
+                kind=args.kind,
             )
             tracks = tracks_from_folder(args.folder.expanduser())
             if not tracks:
