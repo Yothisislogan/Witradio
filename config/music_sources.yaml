@@ -1,0 +1,106 @@
+# Where WIT-FM's cleared lossless classical comes from (tools/pull_music.py).
+#
+# Every source here was checked on the Internet Archive on Nov 18, 2026: the
+# item exists, holds original lossless files, and carries the license below.
+# The show bible's rule still applies: a recording and the composition it
+# carries both have to be clear, and every work is credited on air.
+#
+# Fields:
+#   archive_item   Internet Archive identifier
+#   grouping       how files become works: album (all one work), folder (one
+#                  work per folder), catalog_number (files sharing a BWV/Op./K
+#                  number), movements ("<work> - I. <movement>" file names)
+#   title_from     tag (the files' title tags) or filename
+#   license        cc0 or public_domain
+#   verify         if set, works arrive quarantined until you confirm the
+#                  license and run: tools/pull_music.py approve <source>
+#   credit         on-air credit; {performer} is filled from the file tags
+#   composer, performer, work: fixed values when the tags don't carry them
+
+sources:
+
+  open-goldberg:
+    description: "The Open Goldberg Variations, Kimiko Ishizaka (2012), 24-bit studio masters"
+    archive_item: OpenGoldbergVariations
+    grouping: album
+    license: cc0
+    license_evidence: >-
+      CC0 1.0 Universal, released by Kimiko Ishizaka (opengoldbergvariations.org);
+      Internet Archive item OpenGoldbergVariations
+    credit: "Kimiko Ishizaka (courtesy credit)"
+    composer: Johann Sebastian Bach
+    performer: Kimiko Ishizaka
+    year: 2012
+    tags: [keyboard, piano, solo_piano]
+    work:
+      title: "Goldberg Variations, BWV 988"
+      form: variations
+      composition_year: 1741
+
+  open-wtc-1:
+    description: "The Open Well-Tempered Clavier, Book I, Kimiko Ishizaka (2015), 24-bit"
+    archive_item: bach-well-tempered-clavier-book-1
+    grouping: catalog_number
+    license: cc0
+    license_evidence: >-
+      Released under CC0 1.0 Universal by Kimiko Ishizaka
+      (music.kimiko-piano.com/album/bach-well-tempered-clavier-book-1);
+      Internet Archive item bach-well-tempered-clavier-book-1
+    credit: "Kimiko Ishizaka (courtesy credit)"
+    composer: Johann Sebastian Bach
+    performer: Kimiko Ishizaka
+    year: 2015
+    tags: [keyboard, piano, solo_piano]
+    work:
+      # Each prelude and its fugue share a BWV number and air as one work.
+      title_template: "Prelude and Fugue No. {number} in {key}, BWV {catalog}"
+      form: prelude_and_fugue
+      composition_year: 1722
+
+  ishizaka-art-of-fugue:
+    description: "The Art of the Fugue, Kimiko Ishizaka (2017), 24-bit; a third-party upload"
+    archive_item: pandacd-715-js-bach-the-art-of-the-fugue-kunst-der-fuge-bwv-1080
+    grouping: album
+    license: cc0
+    license_evidence: >-
+      CC0 1.0 per the Internet Archive uploads of Kimiko Ishizaka's Bandcamp
+      release (items pandacd-715-... and cassetteur-art-of-the-fugue-v1)
+    verify: >-
+      Uploaded by a third party, not the performer. Confirm the CC0 release on
+      kimikoishizaka.bandcamp.com before approving.
+    credit: "Kimiko Ishizaka (courtesy credit)"
+    composer: Johann Sebastian Bach
+    performer: Kimiko Ishizaka
+    year: 2017
+    tags: [keyboard, piano, solo_piano]
+    work:
+      title: "The Art of the Fugue, BWV 1080"
+      form: fugue
+      composition_year: 1751
+
+  musopen-chopin:
+    description: "Musopen: The Complete Works of Frederic Chopin (Set Chopin Free, 2013)"
+    archive_item: musopen-chopin-complete-works-flac
+    grouping: movements
+    title_from: filename
+    license: cc0
+    license_evidence: >-
+      CC0 1.0: Musopen's "Set Chopin Free" Kickstarter recordings;
+      Internet Archive item musopen-chopin-complete-works-flac
+    credit: "{performer} via Musopen"
+    composer: Frédéric Chopin
+    year: 2013
+    tags: [keyboard, piano, solo_piano]
+
+  musopen-kickstarter:
+    description: "Musopen Kickstarter recordings (2012): symphonies, overtures, quartets, Schubert sonatas"
+    archive_item: MusopenCollectionAsFlac
+    grouping: folder
+    title_from: tag
+    license: public_domain
+    license_evidence: >-
+      Released to the public domain by Musopen (2012 Kickstarter); Public Domain
+      Mark on the original upload, Internet Archive item musopen-lossless-dvd;
+      FLAC copy MusopenCollectionAsFlac
+    credit: "{performer} via Musopen"
+    year: 2012

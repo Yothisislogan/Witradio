@@ -118,6 +118,7 @@ CREATE TABLE IF NOT EXISTS files (
     duration_sec REAL NOT NULL,
     lossless INTEGER NOT NULL DEFAULT 0,
     hf_cutoff_hz REAL,
+    master_path TEXT,
     added_at TEXT NOT NULL,
     UNIQUE (work_id, seq)
 );
@@ -210,6 +211,7 @@ class FileRecord:
     bit_depth: int | None = None
     channels: int | None = None
     hf_cutoff_hz: float | None = None
+    master_path: str | None = None  # the original (often 24-bit) this air copy came from
 
 
 @dataclass(frozen=True)
@@ -246,10 +248,46 @@ class Work:
     def lossless(self) -> bool:
         return bool(self.files) and all(f.lossless for f in self.files)
 
+    @property
+    def key(self) -> str:
+        return work_key(self.composer, self.title)
+
     def display(self) -> str:
         parts = [p for p in (self.composer, self.title) if p]
         text = ": ".join(parts) if len(parts) == 2 else (parts[0] if parts else f"work {self.id}")
         return f"{text} ({self.performer})" if self.performer else text
+
+
+_CATALOG_NO_RE = re.compile(
+    r"\b(BWV|HWV|RV|Hob|K|KV|D|Op|B|WoO|TrV|S|L|Sz)\.?\s*(?:No\.?\s*)?([IVX]+:)?\s*(\d+[a-z]?)"
+    r"(?:,?\s*(?:No\.?|Nr\.?)\s*(\d+))?",
+    re.IGNORECASE,
+)
+
+
+def _fold(text: str) -> str:
+    import unicodedata
+
+    text = unicodedata.normalize("NFKD", text)
+    text = "".join(c for c in text if not unicodedata.combining(c))
+    return re.sub(r"[^a-z0-9]+", " ", text.lower()).strip()
+
+
+def work_key(composer: str | None, title: str) -> str:
+    """One key per composition, whoever plays it.
+
+    Two recordings of the Goldberg Variations share "bach|bwv 988", so the
+    rotation rules treat them as the same work. Catalog numbers win when the
+    title has one; otherwise the folded title words are the key.
+    """
+    surname = _fold(composer or "").split(" ")[-1] if composer else ""
+    match = _CATALOG_NO_RE.search(title or "")
+    if match:
+        prefix = match.group(1).lower().replace("kv", "k")
+        number = (match.group(2) or "").lower() + match.group(3).lower()
+        sub = f" no {match.group(4)}" if match.group(4) else ""
+        return f"{surname}|{prefix} {number}{sub}"
+    return f"{surname}|{_fold(title or '')}"
 
 
 @dataclass(frozen=True)
@@ -471,6 +509,17 @@ class Catalog:
         if str(path) != ":memory:":
             self.db.execute("PRAGMA journal_mode = WAL")
         self.db.executescript(SCHEMA)
+        self._migrate()
+
+    def _migrate(self) -> None:
+        """Add columns that newer versions expect to an older database."""
+        wanted = {"works": {"cycle": "TEXT", "cycle_no": "INTEGER"}, "files": {"master_path": "TEXT"}}
+        for table, columns in wanted.items():
+            have = {row[1] for row in self.db.execute(f"PRAGMA table_info({table})")}
+            for column, kind in columns.items():
+                if column not in have:
+                    self.db.execute(f"ALTER TABLE {table} ADD COLUMN {column} {kind}")
+        self.db.commit()
 
     def close(self) -> None:
         self.db.close()
@@ -544,17 +593,44 @@ class Catalog:
                 db.execute(
                     """INSERT INTO files (work_id, seq, part_title, path, sha256, codec,
                            sample_rate, bit_depth, channels, duration_sec, lossless,
-                           hf_cutoff_hz, added_at)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                           hf_cutoff_hz, master_path, added_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (
                         work_id, seq, info.get("part_title"), str(info["path"]),
                         info.get("sha256"), info.get("codec"), info.get("sample_rate"),
                         info.get("bit_depth"), info.get("channels"),
                         float(info["duration_sec"]), int(bool(info.get("lossless"))),
-                        info.get("hf_cutoff_hz"), now,
+                        info.get("hf_cutoff_hz"), info.get("master_path"), now,
                     ),
                 )
         return work_id
+
+    EDITABLE = (
+        "title", "composer", "performer", "form", "year", "composition_year", "source_url",
+        "license", "license_evidence", "credit_line", "notes", "cycle", "cycle_no", "gain_db",
+    )
+
+    def update_work(self, work_id: int, **fields: Any) -> None:
+        """Correct a work's metadata during review (credits, years, titles)."""
+        unknown = set(fields) - set(self.EDITABLE) - {"tags"}
+        if unknown:
+            raise CatalogError(f"Cannot edit {', '.join(sorted(unknown))}")
+        if "license" in fields and fields["license"] not in LICENSES:
+            raise CatalogError(f"Unknown license {fields['license']!r}")
+        if "credit_line" in fields and not str(fields["credit_line"]).strip():
+            raise CatalogError("Every work needs a credit line")
+        if "tags" in fields:
+            fields["tags"] = json.dumps(sorted({t.strip().lower() for t in fields["tags"] if t.strip()}))
+        if not fields:
+            return
+        columns = ", ".join(f"{k} = ?" for k in fields)
+        with self.transaction() as db:
+            cur = db.execute(f"UPDATE works SET {columns} WHERE id = ?", (*fields.values(), work_id))
+            if cur.rowcount == 0:
+                raise CatalogError(f"No work with id {work_id}")
+
+    def has_path(self, path: str | Path) -> bool:
+        return self.db.execute("SELECT 1 FROM files WHERE path = ?", (str(path),)).fetchone() is not None
 
     def set_status(self, work_id: int, status: str, note: str | None = None) -> None:
         if status not in STATUSES:
@@ -640,6 +716,7 @@ class Catalog:
                 part_title=row["part_title"], sha256=row["sha256"], codec=row["codec"],
                 sample_rate=row["sample_rate"], bit_depth=row["bit_depth"],
                 channels=row["channels"], hf_cutoff_hz=row["hf_cutoff_hz"],
+                master_path=row["master_path"],
             ))
         return grouped
 
@@ -997,6 +1074,22 @@ def main(argv: Sequence[str] | None = None) -> int:
     p_note = sub.add_parser("dispute-note", help="text for a YouTube/Twitch claim dispute")
     p_note.add_argument("work_id", type=int)
 
+    p_edit = sub.add_parser("edit", help="correct a work's metadata (credit, years, title...)")
+    p_edit.add_argument("work_id", type=int)
+    p_edit.add_argument("--title")
+    p_edit.add_argument("--composer")
+    p_edit.add_argument("--performer")
+    p_edit.add_argument("--form")
+    p_edit.add_argument("--credit", dest="credit_line")
+    p_edit.add_argument("--year", type=int)
+    p_edit.add_argument("--composition-year", type=int)
+    p_edit.add_argument("--license", choices=LICENSES)
+    p_edit.add_argument("--license-evidence")
+    p_edit.add_argument("--notes")
+    p_edit.add_argument("--cycle")
+    p_edit.add_argument("--cycle-no", type=int)
+    p_edit.add_argument("--tag", action="append", dest="tags", help="replaces all tags")
+
     p_status = sub.add_parser("status", help="quarantine, reject or reactivate a work")
     p_status.add_argument("work_id", type=int)
     p_status.add_argument("status", choices=STATUSES)
@@ -1062,6 +1155,18 @@ def main(argv: Sequence[str] | None = None) -> int:
 
         if args.cmd == "dispute-note":
             print(catalog.dispute_note(args.work_id))
+            return 0
+
+        if args.cmd == "edit":
+            fields = {
+                k: getattr(args, k) for k in (*Catalog.EDITABLE, "tags")
+                if getattr(args, k, None) is not None
+            }
+            catalog.update_work(args.work_id, **fields)
+            work = catalog.work(args.work_id)
+            reasons = catalog.airability(work)
+            print(f"{work.id}: {work.display()} | credit: {work.credit_line}")
+            print("  airable" if not reasons else "  not airable: " + "; ".join(reasons))
             return 0
 
         if args.cmd == "status":

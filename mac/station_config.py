@@ -225,6 +225,12 @@ class StationConfig:
         return self.home_dir / "history.db"
 
     @property
+    def library_dir(self) -> Path:
+        """Music library: downloaded masters, 16/44.1 air copies, intake reports."""
+        env = os.environ.get("WRIT_LIBRARY_DIR")
+        return Path(env).expanduser() if env else self.output_dir / "library"
+
+    @property
     def catalog_db_path(self) -> Path:
         """License records, airplay log and permissions (mac/catalog.py)."""
         return self.home_dir / "catalog.db"
