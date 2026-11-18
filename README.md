@@ -10,7 +10,7 @@ plan, November 2026). The new station is built beside the live one as
 [docs/live-setup.md](docs/live-setup.md): the Phase 0 runbook (rotating the
 Icecast passwords, snapshotting the server, the `/next` test loop) and the
 Phase 1 guide. Phase 1 covers the Liquidsoap playout (Ogg FLAC on
-`/lossless`, MP3 on `/next`, fallbacks, SMS alerts), the scripts that pull the
+`/lossless`, MP3 on `/next`, fallbacks, email alerts), the scripts that pull the
 bible's cleared classical recordings and The Stacks' Library of Congress
 recordings into the catalog, the format-hours
 schedule, the classical fill planner and the OpenAI-compatible LLM client.
@@ -274,7 +274,7 @@ The listener daemon polls for new messages every 30 seconds and generates spoken
 │   ├── playout_director.py     # wit-next: decides each item for Liquidsoap
 │   ├── playout.sh              # wit-next: runs the director and Liquidsoap
 │   ├── playout_monitor.py      # wit-next: outside health checks, listener log
-│   ├── alerts.py               # SMS alerts through Twilio
+│   ├── alerts.py               # Alerts by email (text messages optional)
 │   ├── catalog.py              # Music catalog: licenses, gain, airplay audit
 │   ├── classical_planner.py    # Classical block planner and rotation rules
 │   ├── music_library.py        # Download, check and catalogue music sources

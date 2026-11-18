@@ -1,8 +1,12 @@
-"""SMS alerts (against a fake Twilio) and the outside monitor (against a fake Icecast)."""
+"""Alerts (against a fake SMTP server and a fake Twilio) and the outside
+monitor (against a fake Icecast)."""
 
 import base64
+import email
+import email.policy
 import http.server
 import json
+import socketserver
 import sqlite3
 import tempfile
 import threading
@@ -11,9 +15,66 @@ import urllib.parse
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from mac.alerts import Alerter
 from mac.playout_monitor import Monitor
+
+
+class FakeSMTP(socketserver.ThreadingTCPServer):
+    """Just enough SMTP for smtplib: EHLO, AUTH PLAIN, MAIL, RCPT, DATA, QUIT."""
+
+    daemon_threads = True
+    allow_reuse_address = True
+
+    def __init__(self):
+        super().__init__(("127.0.0.1", 0), FakeSMTPHandler)
+        self.messages: list[dict] = []
+        self.refuse_recipients = False
+
+
+class FakeSMTPHandler(socketserver.StreamRequestHandler):
+    def reply(self, line: str) -> None:
+        self.wfile.write((line + "\r\n").encode())
+
+    def handle(self):
+        server: FakeSMTP = self.server
+        envelope = {"from": None, "to": [], "auth": None}
+        self.reply("220 fake ESMTP")
+        while True:
+            raw = self.rfile.readline()
+            if not raw:
+                return
+            line = raw.decode().rstrip("\r\n")
+            verb = line.split(" ", 1)[0].upper()
+            if verb == "EHLO":
+                self.wfile.write(b"250-fake\r\n250-AUTH PLAIN\r\n250 8BITMIME\r\n")
+            elif verb == "AUTH":
+                _, user, password = base64.b64decode(line.split()[2]).split(b"\0")
+                envelope["auth"] = (user.decode(), password.decode())
+                self.reply("235 accepted")
+            elif verb == "MAIL":
+                envelope["from"] = line.split(":", 1)[1].split()[0].strip("<>")
+                self.reply("250 ok")
+            elif verb == "RCPT":
+                if server.refuse_recipients:
+                    self.reply("550 no such user")
+                    continue
+                envelope["to"].append(line.split(":", 1)[1].strip().strip("<>"))
+                self.reply("250 ok")
+            elif verb == "DATA":
+                self.reply("354 go ahead")
+                lines = []
+                while (data := self.rfile.readline()) not in (b".\r\n", b""):
+                    lines.append(data)
+                server.messages.append({**envelope, "message": email.message_from_bytes(
+                    b"".join(lines), policy=email.policy.default)})
+                self.reply("250 queued")
+            elif verb == "QUIT":
+                self.reply("221 bye")
+                return
+            else:
+                self.reply("250 ok")
 
 
 class FakeServer(http.server.ThreadingHTTPServer):
@@ -80,9 +141,9 @@ class AlertTests(Base):
         self.assertEqual(path, "/2010-04-01/Accounts/ACtest/Messages.json")
         self.assertEqual(headers["Authorization"], "Basic " + base64.b64encode(b"ACtest:secret").decode())
         self.assertEqual(form, {"To": ["+15550002222"], "From": ["+15550001111"],
-                                "Body": ["WIT-FM Next: 20 s of silence"]})
+                                "Body": ["[WIT-FM Next] 20 s of silence"]})
         self.assertEqual(len(self.server.posts), 3)
-        self.assertEqual(self.server.posts[-1][2]["Body"], ["WIT-FM Next: audio is back"])
+        self.assertEqual(self.server.posts[-1][2]["Body"], ["[WIT-FM Next] Resolved: audio is back"])
 
     def test_messaging_service_is_preferred(self):
         env = {**self.env, "TWILIO_MESSAGING_SERVICE_SID": "MGtest"}
@@ -102,9 +163,71 @@ class AlertTests(Base):
         self.server.reply_code = 400
         self.assertEqual(Alerter(self.dir, env=self.env).send("x", "hello"), "failed")
 
-    def test_bad_numbers_are_refused(self):
-        with self.assertRaises(ValueError):
-            Alerter(self.dir, env={**self.env, "WRIT_ALERT_SMS_TO": "555-0100"}).recipients()
+    def test_bad_numbers_skip_the_channel_and_are_reported(self):
+        alerter = Alerter(self.dir, env={**self.env, "WRIT_ALERT_SMS_TO": "555-0100"})
+        self.assertEqual(alerter.send("x", "hello"), "logged")  # never raises mid-outage
+        self.assertIn("E.164", alerter.config_errors["sms"])
+
+
+class EmailTests(Base):
+    def setUp(self):
+        super().setUp()
+        self.smtp = FakeSMTP()
+        threading.Thread(target=self.smtp.serve_forever, daemon=True).start()
+        self.addCleanup(self.smtp.server_close)
+        self.addCleanup(self.smtp.shutdown)
+        self.mail_env = {
+            "WRIT_ALERT_EMAIL_TO": "ops@example.com, oncall@example.com",
+            "WRIT_SMTP_HOST": "127.0.0.1", "WRIT_SMTP_PORT": str(self.smtp.server_address[1]),
+            "WRIT_SMTP_SECURITY": "none", "WRIT_SMTP_USER": "alerts@example.com", "WRIT_SMTP_PASSWORD": "app-password",
+        }
+
+    def test_email_alert_and_all_clear(self):
+        alerter = Alerter(self.dir, call_sign="WIT-FM Next", env=self.mail_env)
+        t0 = datetime(2026, 11, 18, 3, 0, tzinfo=timezone.utc)
+        self.assertEqual(alerter.send("silence", "20 s of silence on air", now=t0), "sent")
+        self.assertEqual(alerter.send("silence", "20 s of silence on air", now=t0 + timedelta(minutes=5)), "cooldown")
+        self.assertEqual(alerter.clear("silence", "audio is back on air", now=t0 + timedelta(minutes=6)), "sent")
+
+        first, resolved = self.smtp.messages
+        self.assertEqual(first["auth"], ("alerts@example.com", "app-password"))
+        self.assertEqual(first["from"], "alerts@example.com")
+        self.assertEqual(first["to"], ["ops@example.com", "oncall@example.com"])
+        self.assertEqual(first["message"]["Subject"], "[WIT-FM Next] 20 s of silence on air")
+        body = first["message"].get_content()
+        self.assertIn("20 s of silence on air", body)
+        self.assertIn("Tue Nov 17, 10:00 PM Eastern (03:00 UTC)", body)
+        self.assertEqual(resolved["message"]["Subject"], "[WIT-FM Next] Resolved: audio is back on air")
+        self.assertEqual(self.server.posts, [])  # no Twilio settings: no texts
+
+    def test_email_and_text_together_and_partial_failure(self):
+        alerter = Alerter(self.dir, call_sign="WIT-FM Next", env={**self.env, **self.mail_env})
+        self.assertEqual(alerter.send("mount", "/lossless is off Icecast"), "sent")
+        self.assertEqual(len(self.smtp.messages), 1)
+        self.assertEqual(len(self.server.posts), 1)
+        self.smtp.refuse_recipients = True  # email fails, the text still goes out
+        self.assertEqual(alerter.send("buffer", "only 3 h in the buffer"), "sent")
+        log = [json.loads(line) for line in (self.dir / "alerts.jsonl").read_text().splitlines()]
+        self.assertIn("email", log[-1]["errors"])
+
+    def test_all_channels_failing_reports_failure(self):
+        self.smtp.refuse_recipients = True
+        self.assertEqual(Alerter(self.dir, env=self.mail_env).send("x", "hello"), "failed")
+
+    def test_starttls_is_used_on_port_587(self):
+        env = {**self.mail_env, "WRIT_SMTP_PORT": "587", "WRIT_SMTP_SECURITY": ""}
+        with patch("smtplib.SMTP") as smtp:
+            client = smtp.return_value
+            self.assertEqual(Alerter(self.dir, env=env).send("x", "hello"), "sent")
+        smtp.assert_called_once_with("127.0.0.1", 587, timeout=20)
+        client.starttls.assert_called_once()
+        client.login.assert_called_once_with("alerts@example.com", "app-password")
+        client.send_message.assert_called_once()
+
+    def test_bad_address_skips_email_and_is_reported(self):
+        alerter = Alerter(self.dir, env={**self.mail_env, "WRIT_ALERT_EMAIL_TO": "not an address"})
+        self.assertFalse(alerter.configured())
+        self.assertIn("email addresses", alerter.config_errors["email"])
 
 
 class MonitorTests(Base):

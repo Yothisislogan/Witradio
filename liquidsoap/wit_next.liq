@@ -10,8 +10,8 @@
 # crashed Liquidsoap 2.2.4 in rehearsal). Classical works carry one fixed
 # gain each and no fades, crossfades, compression or limiting; works are
 # separated by the planner's 2-4 s of silence. If the director fails, the chain
-# falls back to the safe library, then station IDs, then silence, and an SMS
-# goes out after 20 s of dead air.
+# falls back to the safe library, then station IDs, then silence, and an alert
+# email goes out after 20 s of dead air.
 #
 # Start it with mac/playout.sh (or `./writ --station wit-next start playout`),
 # which exports the station's settings. Needs Liquidsoap 2.2 or newer.

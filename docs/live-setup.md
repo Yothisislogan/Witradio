@@ -4,7 +4,7 @@ Written November 18, 2026, for Phase 0 of the overhaul (development plan:
 "Secure and baseline", Nov 17-23). It covers the server steps the code can't
 do: rotating the passwords, snapshotting the server, writing down what
 actually runs, and passing the Phase 0 gate. Section 6 covers Phase 1: the
-Liquidsoap playout, SMS alerts and stocking the music library, including
+Liquidsoap playout, email alerts and stocking the music library, including
 the Library of Congress recordings for The Stacks.
 
 Section 3 describes the live station **as the repository describes it**. The
@@ -235,7 +235,7 @@ master feeds two outputs, encoded in parallel: `/lossless` (Ogg FLAC) and
 | Classical fill planner and rotation rules | `mac/classical_planner.py` | `python3 mac/classical_planner.py --at "2026-11-18 23:00"` |
 | Playout master: outputs, gain, fallbacks, silence detection | `liquidsoap/wit_next.liq` | `./writ --station wit-next start playout` |
 | Director: what plays next, now-playing, airplay log | `mac/playout_director.py` | `python3 mac/playout_director.py status` |
-| SMS alerts through Twilio | `mac/alerts.py` | `python3 mac/alerts.py test` |
+| Alerts by email (text messages optional) | `mac/alerts.py` | `python3 mac/alerts.py test` |
 | Outside monitor and listener log | `mac/playout_monitor.py` | `python3 mac/playout_monitor.py once` |
 | One OpenAI-compatible LLM client | `mac/llm_client.py` | `python3 mac/llm_client.py --station wit-next -p "Say hello"` |
 
@@ -304,7 +304,8 @@ Mix, and classical blocks still under their hours, play the show's buffer
 If the director stops answering, Liquidsoap falls back on its own: safe
 library (`library/air/safe`), then station IDs (`library/ids`), then
 silence.
-After 20 s below -60 dBFS it texts, and texts again when audio returns.
+After 20 s below -60 dBFS it sends an alert email, and another when audio
+returns.
 The monitor watches from outside: both mounts on Icecast, the program
 moving, an 8-second silence sample of `/next`, the buffer under
 `WRIT_BUFFER_ALERT_HOURS` (default 12, once it has filled) and, when
@@ -342,26 +343,40 @@ python3 -m pytest tests/test_playout_liquidsoap.py -v
 Icecast passes the Ogg pages through untouched: in rehearsal, a recording
 of `/lossless` from Icecast matched the source file's SHA-256.
 
-### 6.4 SMS alerts
+### 6.4 Alerts by email
+
+The playout emails when something goes wrong: 20 s of silence, a mount off
+Icecast, the program stalled, the buffer running low, or the Halo not
+answering. Each problem sends at most one email every 30 minutes, then one
+"Resolved" email when it clears.
 
 Set these where `writ` is started from, never in the repository:
 
 | Variable | Value |
 |---|---|
-| `TWILIO_ACCOUNT_SID` | `AC...` |
-| `TWILIO_AUTH_TOKEN`, or `TWILIO_API_KEY` and `TWILIO_API_SECRET` | An API key is better for production |
-| `TWILIO_MESSAGING_SERVICE_SID` or `TWILIO_FROM` | A Messaging Service (`MG...`, recommended) or a Twilio number in E.164 (`+15551234567`) |
-| `WRIT_ALERT_SMS_TO` | One or more E.164 numbers, comma-separated |
+| `WRIT_ALERT_EMAIL_TO` | Who gets the alerts; several addresses separated by commas |
+| `WRIT_SMTP_HOST` | Your mail provider's SMTP server, e.g. `smtp.gmail.com` |
+| `WRIT_SMTP_PORT` | `587` (the default), or `465` for SSL |
+| `WRIT_SMTP_USER` | The account that sends, ideally a mailbox just for alerts |
+| `WRIT_SMTP_PASSWORD` | Its password; for Gmail, an app password |
+| `WRIT_SMTP_FROM` | The sender address, if it isn't `WRIT_SMTP_USER` |
 
-Without them, alerts go to `runtime/playout/alerts.jsonl` and nothing is
-sent. Each problem texts at most once every 30 minutes, then once when it
-clears. Carriers block texts from unregistered US long codes (Twilio error
-30034), so register the number for A2P 10DLC, or use a verified toll-free
-number. Send a test:
+With Gmail, turn on 2-Step Verification for the sending account, create an
+app password, and use `smtp.gmail.com` on port 587. A sending service such
+as SendGrid, Mailgun or Amazon SES works too: each gives you an SMTP host,
+user and password. Send from an address the provider is allowed to send
+for, or the alerts may land in spam.
+
+Send a test:
 
 ```bash
 python3 mac/alerts.py --station wit-next test
 ```
+
+Without these settings, alerts only go to `runtime/playout/alerts.jsonl`.
+Text messages through Twilio still work alongside email if its settings
+are present (`mac/alerts.py` lists them), but US carriers only deliver them
+once the number is registered (A2P 10DLC or toll-free verification).
 
 ### 6.5 Stocking the library
 

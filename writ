@@ -304,7 +304,9 @@ start_one() {
         # from a fresh window rather than an old shell without it.
         ensure_session
         set_tmux_env_if_present "$STATION_PASSWORD_ENV"
-        for var in TWILIO_ACCOUNT_SID TWILIO_AUTH_TOKEN TWILIO_API_KEY TWILIO_API_SECRET \
+        for var in WRIT_ALERT_EMAIL_TO WRIT_SMTP_HOST WRIT_SMTP_PORT WRIT_SMTP_USER WRIT_SMTP_PASSWORD \
+                   WRIT_SMTP_FROM WRIT_SMTP_SECURITY \
+                   TWILIO_ACCOUNT_SID TWILIO_AUTH_TOKEN TWILIO_API_KEY TWILIO_API_SECRET \
                    TWILIO_MESSAGING_SERVICE_SID TWILIO_FROM WRIT_ALERT_SMS_TO \
                    WRIT_BUFFER_ALERT_HOURS WRIT_LLM_BASE_URL WRIT_LLM_MODEL; do
             set_tmux_env_if_present "$var"
@@ -417,7 +419,7 @@ cmd_stop() {
         ""|all)
             log "Stopping all..."
             stop_one youtube
-            # The wit-next playout: the monitor first, so stopping doesn't text anyone.
+            # The wit-next playout: the monitor first, so stopping doesn't send alerts.
             for c in monitor playout station-api; do
                 if window_exists "$(component_window "$c")"; then stop_one "$c"; fi
             done

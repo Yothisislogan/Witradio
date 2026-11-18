@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Watches the playout from outside it (development plan, items 7 and 9).
 
-Liquidsoap texts on silence itself, but that path runs through the director.
+Liquidsoap raises the silence alert itself, but that path runs through the director.
 This monitor is the safety net when Liquidsoap or the director is the
 problem, and it keeps the listener log the schedule will be tuned with:
 
