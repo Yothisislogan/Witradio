@@ -45,9 +45,13 @@ name_of() {
     esac
 }
 
+# ezstream waits for this script before it sends more audio, so it must never
+# block. Plain python3 is enough for a stdlib-only JSON read; `uv run` could
+# start syncing the project environment (e.g. after pyproject.toml changes)
+# and stall the stream into dead air.
 json_field() {
     (
-        cd "$PROJECT_ROOT" && uv run python -c '
+        cd "$PROJECT_ROOT" && "${WRIT_METADATA_PYTHON:-python3}" -c '
 import json
 import sys
 from pathlib import Path

@@ -421,6 +421,21 @@ def build_playlist(show_id: str, slot: str) -> list[dict]:
     return entries
 
 
+def write_filler(path: Path, seconds: int = 30) -> None:
+    """Write the fallback filler: pink noise around -87 dBFS.
+
+    It is inaudible, but unlike digital silence it keeps a normal Vorbis
+    bitrate, so ezstream paces it in real time and Icecast never drops the
+    source for going quiet.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    subprocess.run([
+        "ffmpeg", "-y", "-v", "quiet",
+        "-f", "lavfi", "-i", "anoisesrc=color=pink:amplitude=0.0003:sample_rate=44100",
+        "-ac", "2", "-sample_fmt", "s16", "-t", str(seconds), str(path),
+    ], check=True)
+
+
 def write_playlist(entries: list[dict]):
     """Write the M3U playlist file."""
     PLAYLIST_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -441,15 +456,9 @@ def run():
     log(f"Station: {STATION.id} | Mount: {STATION.stream.mount}")
     log(f"Playlist: {PLAYLIST_FILE}")
 
-    # Ensure silence file exists for fallback
     if not SILENCE_FILE.exists():
-        log("Creating silence fallback file...")
-        SILENCE_FILE.parent.mkdir(parents=True, exist_ok=True)
-        subprocess.run([
-            "ffmpeg", "-y", "-v", "quiet",
-            "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
-            "-t", "30", str(SILENCE_FILE),
-        ], check=True)
+        log("Creating room-tone fallback file...")
+        write_filler(SILENCE_FILE)
 
     # Shared state for API server
     track_info = {"track": None, "type": None, "show": None}

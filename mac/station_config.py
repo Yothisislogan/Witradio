@@ -166,7 +166,11 @@ class StationConfig:
 
     @property
     def silence_file(self) -> Path:
-        return self.runtime_dir / ".silence.wav"
+        # Inaudible room tone, not digital silence: ezstream sends digitally
+        # silent Ogg Vorbis far ahead of real time, then starves Icecast for
+        # 10+ seconds and the source is dropped ("socket timeout"), taking
+        # listeners with it. The new name makes old installs regenerate it.
+        return self.runtime_dir / ".silence_roomtone.wav"
 
     @property
     def current_track_file(self) -> Path:

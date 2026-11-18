@@ -1,3 +1,6 @@
+import re
+import shutil
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -163,6 +166,26 @@ class FeederPlaylistTests(unittest.TestCase):
                 bumpers = feeder.get_bumpers("stack_trace_after_dark")
 
         self.assertEqual([b.name for b in bumpers], ["stack_trace_after_dark_bumper_local.flac"])
+
+
+@unittest.skipUnless(shutil.which("ffmpeg"), "ffmpeg is required")
+class FillerTests(unittest.TestCase):
+    def test_filler_is_inaudible_but_not_digital_silence(self):
+        # Digital silence makes Icecast drop the source; room tone does not.
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "runtime" / ".silence_roomtone.wav"
+            feeder.write_filler(path, seconds=3)
+            result = subprocess.run(
+                ["ffmpeg", "-hide_banner", "-i", str(path), "-af", "volumedetect", "-f", "null", "-"],
+                capture_output=True, text=True, check=True,
+            )
+        peak = float(re.search(r"max_volume: (-?[\d.]+) dB", result.stderr).group(1))
+        self.assertLess(peak, -60.0)
+        self.assertGreater(peak, -90.0)
+
+    def test_station_filler_has_a_new_name_so_old_installs_regenerate_it(self):
+        self.assertEqual(feeder.STATION.silence_file.name, ".silence_roomtone.wav")
+        self.assertIn("silence", feeder.STATION.silence_file.name)  # still typed as silence
 
 
 if __name__ == "__main__":
