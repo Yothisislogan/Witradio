@@ -61,3 +61,28 @@ stations:
       stream_name: CDEX-FM
       stream_genre: AI Radio
       stream_description: Codex directed autonomous radio
+
+  # WIT-FM Next: the overhaul, built beside the live station on its own mount
+  # (development plan, Phase 0). It replaces /stream at the Phase 3 cutover.
+  # Scripts come from one OpenAI-compatible endpoint on the Halo; there is no
+  # operator agent loop. Classical runs from a deterministic planner.
+  wit-next:
+    call_sign: WIT-FM Next
+    agent:
+      kind: openai
+    llm:
+      base_url: http://halo.local:8080/v1   # any OpenAI-compatible server
+      model: ${SCRIPT_MODEL}                # swap freely; must pass the show test set
+    paths:
+      output_dir: output/stations/wit-next
+      home_dir: ~/.writ/stations/wit-next
+      schedule_path: config/wit_next_schedule.yaml
+    stream:
+      icecast_host: localhost
+      icecast_port: 8000
+      mount: /next
+      api_port: 8002
+      source_password_env: WRIT_SOURCE_PASSWORD
+      stream_name: WIT-FM Next
+      stream_genre: Radio
+      stream_description: Staging mount for the WIT-FM overhaul

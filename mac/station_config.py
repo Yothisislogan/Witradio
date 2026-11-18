@@ -51,6 +51,65 @@ class AgentConfig:
     args: tuple[str, ...] = ()
 
 
+DEFAULT_LLM_BASE_URL = "http://halo.local:8080/v1"
+DEFAULT_LLM_API_KEY_ENV = "WRIT_LLM_API_KEY"
+
+
+@dataclass(frozen=True)
+class LLMConfig:
+    """Any server with an OpenAI-compatible API: llama.cpp, Lemonade, LM Studio, Ollama.
+
+    Used by stations whose agent kind is `openai`. WRIT_LLM_BASE_URL and
+    WRIT_LLM_MODEL override the station config; the API key, if the server
+    wants one, is read from the environment variable named by api_key_env.
+    """
+
+    base_url: str = DEFAULT_LLM_BASE_URL
+    model: str = ""
+    api_key_env: str = DEFAULT_LLM_API_KEY_ENV
+    timeout: float = 300.0
+    temperature: float = 0.8
+    max_tokens: int = 2048
+
+    @property
+    def api_key(self) -> str:
+        return os.environ.get(self.api_key_env, "")
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "base_url": self.base_url,
+            "model": self.model,
+            "api_key_env": self.api_key_env,
+            "timeout": self.timeout,
+            "temperature": self.temperature,
+            "max_tokens": self.max_tokens,
+        }
+
+
+def _expand_setting(value: Any) -> str:
+    """Expand ${VAR} references; an unset variable expands to an empty string."""
+    text = os.path.expandvars(str(value or ""))
+    return "" if "${" in text or text.startswith("$") else text.strip()
+
+
+def _load_llm_config(raw: dict[str, Any] | None) -> LLMConfig:
+    raw = raw or {}
+    base_url = (
+        os.environ.get("WRIT_LLM_BASE_URL")
+        or _expand_setting(raw.get("base_url"))
+        or DEFAULT_LLM_BASE_URL
+    )
+    model = os.environ.get("WRIT_LLM_MODEL") or _expand_setting(raw.get("model"))
+    return LLMConfig(
+        base_url=base_url.rstrip("/"),
+        model=model,
+        api_key_env=str(raw.get("api_key_env") or DEFAULT_LLM_API_KEY_ENV),
+        timeout=float(raw.get("timeout", 300.0)),
+        temperature=float(raw.get("temperature", 0.8)),
+        max_tokens=int(raw.get("max_tokens", 2048)),
+    )
+
+
 @dataclass(frozen=True)
 class StreamConfig:
     icecast_host: str
@@ -91,6 +150,7 @@ class StationConfig:
     home_dir: Path
     schedule_path: Path
     public_now_playing_paths: tuple[Path, ...] = ()
+    llm: LLMConfig = field(default_factory=LLMConfig)
 
     @property
     def runtime_dir(self) -> Path:
@@ -160,6 +220,11 @@ class StationConfig:
     def history_db_path(self) -> Path:
         return self.home_dir / "history.db"
 
+    @property
+    def catalog_db_path(self) -> Path:
+        """License records, airplay log and permissions (mac/catalog.py)."""
+        return self.home_dir / "catalog.db"
+
     def env(self) -> dict[str, str]:
         return {
             "WRIT_STATION_ID": self.id,
@@ -201,6 +266,7 @@ class StationConfig:
                 "command": self.agent.command,
                 "args": list(self.agent.args),
             },
+            "llm": self.llm.to_dict(),
             "stream": {
                 "icecast_host": self.stream.icecast_host,
                 "icecast_port": self.stream.icecast_port,
@@ -325,6 +391,7 @@ def load_station_config(station_id: str | None = None, path: Path = CONFIG_PATH)
         home_dir=_expand_path(paths.get("home_dir", home_default)) or Path.home() / ".writ",
         schedule_path=_expand_path(paths.get("schedule_path", "config/schedule.yaml")) or PROJECT_ROOT / "config" / "schedule.yaml",
         public_now_playing_paths=public_paths,
+        llm=_load_llm_config(raw.get("llm")),
     )
 
 

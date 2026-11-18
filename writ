@@ -236,6 +236,13 @@ start_one() {
     local comp="$1"
     local win; win="$(component_window "$comp")"
 
+    # Stations on the OpenAI-compatible client (wit-next) retire the agent
+    # loops: a deterministic scheduler and per-show producers fill the shows.
+    if [[ "$STATION_AGENT_KIND" == "openai" && ( "$comp" == "operator" || "$comp" == "listener" ) ]]; then
+        err "$STATION_ID has no $comp loop; its shows come from the scheduler and producers."
+        return 1
+    fi
+
     if is_healthy "$comp"; then ok "$comp already running"; return 0; fi
 
     # dependency checks
