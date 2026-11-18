@@ -47,6 +47,7 @@ import subprocess
 import sys
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+from functools import cached_property
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Iterator, Sequence
@@ -248,7 +249,7 @@ class Work:
     def lossless(self) -> bool:
         return bool(self.files) and all(f.lossless for f in self.files)
 
-    @property
+    @cached_property
     def key(self) -> str:
         return work_key(self.composer, self.title)
 
