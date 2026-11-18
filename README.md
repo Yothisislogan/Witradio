@@ -2,6 +2,16 @@
 
 A 24/7 AI-powered music-forward radio station. AI generates the music, writes short hosted breaks, TTS speaks them, and the stream runs forever.
 
+## The WIT-FM overhaul
+
+WIT-FM is moving from four dayparts to eight shows (show bible and development
+plan, November 2026). The new station is built beside the live one as
+`wit-next` on `/next` and replaces `/stream` at the Phase 3 cutover. Start with
+[docs/live-setup.md](docs/live-setup.md): the Phase 0 runbook (rotating the
+Icecast passwords, snapshotting the server, the `/next` test loop) and a map of
+the new pieces: the format-hours schedule, the catalog, the classical fill
+planner and the OpenAI-compatible LLM client.
+
 ## What is this?
 
 WIT-FM is a music-forward internet radio station where:

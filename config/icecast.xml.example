@@ -3,7 +3,8 @@
     <admin>admin@localhost</admin>
     <limits>
         <clients>100</clients>
-        <sources>4</sources>
+        <!-- /stream, /next, /lossless, plus the KLOD/CDEX test mounts -->
+        <sources>8</sources>
     </limits>
     <authentication>
         <source-password>YOUR_SOURCE_PASSWORD</source-password>
@@ -24,6 +25,16 @@
     </mount>
     <mount>
         <mount-name>/cdex-fm</mount-name>
+        <charset>UTF-8</charset>
+    </mount>
+    <!-- WIT-FM overhaul (development plan, Phase 0-1): wit-next staging on
+         /next (MP3, later /stream) and the 24/7 Ogg FLAC master on /lossless. -->
+    <mount>
+        <mount-name>/next</mount-name>
+        <charset>UTF-8</charset>
+    </mount>
+    <mount>
+        <mount-name>/lossless</mount-name>
         <charset>UTF-8</charset>
     </mount>
     <paths>
