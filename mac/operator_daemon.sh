@@ -7,6 +7,13 @@ set -euo pipefail
 RADIO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$RADIO_DIR"
 eval "$(uv run python mac/station_config.py --env)"
+
+# Stations on the OpenAI-compatible client (wit-next) have no operator loop:
+# a deterministic scheduler and per-show producers fill their shows.
+if [ "${WRIT_AGENT_KIND:-}" = "openai" ]; then
+    echo "[operator] ${WRIT_STATION_ID:-station} has no operator loop; nothing to do." >&2
+    exit 0
+fi
 INTERVAL_SECONDS="${WRIT_OPERATOR_INTERVAL_SECONDS:-900}"
 
 ts() { date +%H:%M; }

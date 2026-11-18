@@ -80,6 +80,20 @@ def clean_claude_output(text: str, *, strip_quotes: bool = True) -> str:
     return cleaned
 
 
+def _run_openai_compatible(prompt: str, model: str | None, timeout: int) -> str | None:
+    """Stations with agent kind `openai` call one HTTP endpoint (the Halo)."""
+    from llm_client import LLMClient, LLMError
+
+    client = LLMClient.from_station(STATION)
+    try:
+        # Local models write long scripts slowly; never cut them off sooner
+        # than the station's own LLM timeout.
+        return client.complete(prompt, model=model, timeout=max(float(timeout), client.timeout))
+    except LLMError as exc:
+        log(f"llm error: {exc}")
+        return None
+
+
 def run_claude(
     prompt: str,
     *,
@@ -88,6 +102,13 @@ def run_claude(
     min_length: int = 0,
     strip_quotes: bool = True,
 ) -> str | None:
+    if STATION.agent.kind == "openai":
+        text = _run_openai_compatible(prompt, model, timeout)
+        if not text:
+            return None
+        script = clean_claude_output(text, strip_quotes=strip_quotes)
+        return script if len(script) > min_length else None
+
     if STATION.agent.kind == "codex":
         args = [
             STATION.agent.command,

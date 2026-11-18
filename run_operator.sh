@@ -12,6 +12,13 @@ cd "$PROJECT_ROOT"
 
 eval "$(uv run python mac/station_config.py --env)"
 
+# Stations on the OpenAI-compatible client (wit-next) have no operator loop:
+# a deterministic scheduler and per-show producers fill their shows.
+if [ "${WRIT_AGENT_KIND:-}" = "openai" ]; then
+    echo "[operator] ${WRIT_STATION_ID:-station} has no operator loop; nothing to do." >&2
+    exit 0
+fi
+
 LOG_DIR="${WRIT_OUTPUT_DIR:-output}"
 SESSION_LOG="$LOG_DIR/operator_session_$(date +%Y-%m-%d).log"
 HEARTBEAT_SECONDS="${WRIT_OPERATOR_HEARTBEAT_SECONDS:-30}"
