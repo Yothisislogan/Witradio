@@ -1,0 +1,117 @@
+# Library of Congress sources for The Stacks (show bible: "The Stacks with
+# Steve"). tools/pull_loc.py reads this file; docs/live-setup.md 6.6 has the
+# workflow.
+#
+#   type: loc         Full recordings from a loc.gov collection. Only files
+#                     loc.gov serves from its storage are downloaded, never a
+#                     streaming URL.
+#   type: citizen_dj  The phrase-length clips (about 4 s) the Library's Citizen
+#                     DJ project cut from its recordings: remix material.
+#
+# credit: the attribution after "Performer (Label Catalog, Year)." on air and
+# in now-playing. opt_in sources only run with --opt-in.
+
+sources:
+  loc-edison:
+    type: loc
+    collection: edison-company-motion-pictures-and-sound-recordings
+    filters: ["original-format:sound recording"]
+    credit: "Library of Congress, Motion Picture, Broadcasting, and Recorded Sound Division"
+    description: "Edison disc recordings, Inventing Entertainment collection (about 80)"
+
+  loc-variety-stage:
+    type: loc
+    collection: variety-stage-sound-recordings-and-motion-pictures
+    filters: ["original-format:sound recording"]
+    credit: "Library of Congress, Motion Picture, Broadcasting, and Recorded Sound Division"
+    description: "Vaudeville-era Edison recordings, Variety Stage collection"
+
+  cdj-jukebox:
+    type: citizen_dj
+    collections:
+      - loc-jukebox-popular
+      - loc-jukebox-jazz
+      - loc-jukebox-blues
+      - loc-jukebox-folk-songs
+      - loc-jukebox-classical
+      - loc-jukebox-opera
+      - loc-jukebox-musical-theater
+      - loc-jukebox-humorous-songs
+      - loc-jukebox-spoken
+    credit: "Citizen DJ Project, Library of Congress, National Jukebox"
+    description: "Citizen DJ clips from National Jukebox recordings published before 1923"
+
+  loc-jukebox:
+    type: loc
+    collection: national-jukebox
+    filters: ["online-format:audio"]
+    credit: "Library of Congress, National Jukebox"
+    opt_in: true
+    description: "Full National Jukebox recordings, as WAV masters (about 20,000 from 1900-1925)"
+    note: >-
+      The show bible says to use Citizen DJ's files instead of the Jukebox,
+      because the Jukebox streams are licensed from Sony and couldn't be
+      downloaded. loc.gov now serves WAV masters for these items, and
+      recordings published in or before the cutoff year are public domain.
+      Run this source with --opt-in only if you decide to use them.
+
+screen:
+  # The bible: "This era includes minstrel and racist material. Screen every
+  # title and lyric before it enters the library. Default is exclude."
+  # Every item arrives quarantined until someone listens and approves it.
+  # These lists only decide what is kept out before download (exclude) and
+  # what carries a warning for the reviewer (flag). Terms match whole words,
+  # plurals included, in the title, alternate titles, summary, description
+  # and notes. "Ethnic characterizations" is the National Jukebox's genre for
+  # minstrel and dialect caricature records.
+  exclude_genres:
+    - ethnic characterizations
+  exclude_terms:
+    - coon
+    - darky
+    - darkey
+    - darkie
+    - darkies
+    - darktown
+    - nigger
+    - pickaninny
+    - piccaninny
+    - pickaninnies
+    - mammy
+    - minstrel
+    - minstrelsy
+    - blackface
+    - jim crow
+    - sambo
+    - rastus
+    - chink
+    - chinee
+    - chinaman
+    - jap
+    - wop
+    - dago
+    - kike
+    - sheeny
+    - injun
+    - redskin
+    - squaw
+    - hottentot
+  flag_genres:
+    - humorous songs
+    - comedies
+  flag_terms:
+    - plantation
+    - dixie
+    - dialect
+    - ethiopian
+    - cakewalk
+    - cake walk
+    - negro
+    - mulatto
+    - indian
+    - chinese
+    - oriental
+    - savage
+    - cannibal
+    - uncle tom
+    - old black joe

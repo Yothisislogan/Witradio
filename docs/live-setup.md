@@ -4,7 +4,8 @@ Written November 18, 2026, for Phase 0 of the overhaul (development plan:
 "Secure and baseline", Nov 17-23). It covers the server steps the code can't
 do: rotating the passwords, snapshotting the server, writing down what
 actually runs, and passing the Phase 0 gate. Section 6 covers Phase 1: the
-Liquidsoap playout, SMS alerts and stocking the music library.
+Liquidsoap playout, SMS alerts and stocking the music library, including
+the Library of Congress recordings for The Stacks.
 
 Section 3 describes the live station **as the repository describes it**. The
 server may run changes that were never committed, so every row lists the
@@ -230,6 +231,7 @@ master feeds two outputs, encoded in parallel: `/lossless` (Ogg FLAC) and
 | Format-hours grid, pinned to Eastern | `config/wit_next_schedule.yaml` | `python3 mac/schedule.py --schedule config/wit_next_schedule.yaml week` |
 | Catalog: licenses, years, lossless flag, one gain per work, airplay audit, permissions log, dispute notes | `mac/catalog.py` | `python3 mac/catalog.py --help` |
 | Music pull from the bible's cleared sources | `tools/pull_music.py`, `config/music_sources.yaml` | `python3 tools/pull_music.py sources` |
+| Library of Congress intake for The Stacks, with the content screen | `tools/pull_loc.py`, `config/loc_sources.yaml` | `python3 tools/pull_loc.py sources` |
 | Classical fill planner and rotation rules | `mac/classical_planner.py` | `python3 mac/classical_planner.py --at "2026-11-18 23:00"` |
 | Playout master: outputs, gain, fallbacks, silence detection | `liquidsoap/wit_next.liq` | `./writ --station wit-next start playout` |
 | Director: what plays next, now-playing, airplay log | `mac/playout_director.py` | `python3 mac/playout_director.py status` |
@@ -427,6 +429,102 @@ python3 mac/alerts.py --station wit-next test
    in 1925 or earlier, or carry a CC0 or public-domain grant (Musopen,
    Marine Band). Compositions must date from 1930 or earlier. The intake
    checks both and quarantines what it can't confirm.
+
+### 6.6 The Stacks: Library of Congress recordings
+
+`tools/pull_loc.py` brings in the 100-year-old recordings The Stacks plays.
+The sources are listed in `config/loc_sources.yaml`:
+
+| Source | What it holds | Runs |
+|---|---|---|
+| `loc-edison` | Edison disc recordings, full length (about 80) | by default |
+| `loc-variety-stage` | Vaudeville-era Edison recordings, full length | by default |
+| `cdj-jukebox` | Citizen DJ's clips from National Jukebox records published before 1923, 4 to 30 s each: remix material | by default |
+| `loc-jukebox` | Full National Jukebox recordings as WAV masters (about 20,000 from 1900 to 1925) | only with `--opt-in` |
+
+Screen a source first, then bring items in. Each run takes 25 items unless
+`--limit` says otherwise, and a rerun carries on where the last one stopped:
+
+```bash
+python3 tools/pull_loc.py fetch loc-edison --dry-run
+```
+
+```bash
+python3 tools/pull_loc.py fetch loc-edison --limit 25
+```
+
+```bash
+python3 tools/pull_loc.py fetch cdj-jukebox --collection loc-jukebox-jazz --limit 10
+```
+
+`--query` searches within a source, which suits the theme carts:
+
+```bash
+python3 tools/pull_loc.py fetch loc-edison --query automobile
+```
+
+Every item passes three checks before anything downloads:
+
+1. **Publication year.** "No year, no airplay." Edison records carry their
+   publication year. The Jukebox gives only the session date, so a
+   recording made in 1924 or earlier counts as published by 1925. A 1925
+   recording comes in with no year, because it may have been issued in
+   1926. Later recordings are skipped.
+2. **Issue number.** A label and catalog number show the record was
+   published. Without one, the item comes in with no year.
+3. **Content screen.** Items in the Jukebox's "Ethnic characterizations"
+   genre, or whose titles use slurs, stay out and are never downloaded.
+   Humorous songs, comedies and a list of warning words are flagged. Tune
+   both lists in `config/loc_sources.yaml`.
+
+Everything that comes in is quarantined until someone listens to it. That
+is the Phase 4 gate: nothing the reviewer would exclude reaches air.
+
+```bash
+python3 tools/pull_loc.py review
+```
+
+```bash
+python3 tools/pull_loc.py approve 41 42 43 --by Logan
+```
+
+```bash
+python3 tools/pull_loc.py reject 44 --why "dialect comedy" --by Logan
+```
+
+For an item with no year, look up its release date in the Discography of
+American Historical Recordings (adp.library.ucsb.edu). Set the year, then
+approve it with `--reason publication`:
+
+```bash
+python3 mac/catalog.py edit 45 --year 1925
+```
+
+```bash
+python3 tools/pull_loc.py approve 45 --reason publication --by Logan
+```
+
+`python3 tools/pull_loc.py excluded` lists what the screen kept out, with
+loc.gov links. To review one of those anyway, rerun the fetch with
+`--include <item id>`.
+
+loc.gov allows 20 requests a minute and blocks for an hour past that. Any
+request during the block restarts the hour. The script makes one request
+every 3.5 s and caches item records. On a 429 or a CAPTCHA page it stops
+and says to wait an hour. The host needs to reach `www.loc.gov`,
+`tile.loc.gov`, `s3.amazonaws.com` and `raw.githubusercontent.com`.
+
+**The National Jukebox is your call.** The bible says to use Citizen DJ's
+files instead of the Jukebox, because the Jukebox streams are licensed from
+Sony and couldn't be downloaded. As of November 2026, loc.gov serves WAV
+masters for Jukebox items. Its rights statement says recordings published
+before 1923 have been public domain since 2022, and 1923-1925 recordings
+since 2024-2026. loc.gov offers 1926 records for download too, so its
+download flags don't track copyright: the script's year check does.
+`loc-jukebox` stays opt-in until you decide.
+
+Approved items wait in the catalog. The Stacks producer (development plan
+Phase 4) will schedule them.
 
 ## 7. Decisions due by the end of Phase 0
 

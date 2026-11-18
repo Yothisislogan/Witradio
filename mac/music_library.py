@@ -58,7 +58,7 @@ from catalog import Catalog  # noqa: E402
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SOURCES_PATH = PROJECT_ROOT / "config" / "music_sources.yaml"
 ARCHIVE_BASE = os.environ.get("WRIT_ARCHIVE_BASE", "https://archive.org")
-USER_AGENT = "WIT-FM-library/1.0"
+USER_AGENT = "music-library-pull/1.0"
 LOSSLESS_EXTENSIONS = {".flac", ".wav", ".aif", ".aiff"}
 AIR_RATE = 44100
 # Roughly what a 16/44.1 FLAC of acoustic music takes, for disk estimates.
@@ -424,6 +424,12 @@ class PlannedWork:
     composition_basis: str = ""
     review: list[str] = field(default_factory=list)
     quarantine: list[str] = field(default_factory=list)  # reasons (VERIFY_*)
+    # Per-work values for sources whose works differ (Library of Congress
+    # items); otherwise the source's own apply.
+    year: int | None = None  # the recording's publication year
+    source_url: str | None = None
+    credit_line: str | None = None
+    license_evidence: str | None = None
 
     @property
     def hours(self) -> float:
@@ -431,6 +437,8 @@ class PlannedWork:
 
     @property
     def credit(self) -> str:
+        if self.credit_line:
+            return self.credit_line
         return self.source.credit.format(performer=self.performer or "Unknown performer")
 
     @property
@@ -780,9 +788,10 @@ def ingest(catalog: Catalog, work: PlannedWork, air_root: Path, *, jobs: int = 2
         notes.insert(0, f"composition year {work.composition_year}: {work.composition_basis}")
     work_id = catalog.add_work(
         kind=work.source.kind, title=work.title, composer=work.composer, performer=work.performer,
-        form=work.form, year=work.source.year, composition_year=work.composition_year,
-        source=work.source.name, source_url=work.source.url, license=work.source.license,
-        license_evidence=work.source.license_evidence or None, credit_line=work.credit,
+        form=work.form, year=work.year if work.year is not None else work.source.year,
+        composition_year=work.composition_year, source=work.source.name,
+        source_url=work.source_url or work.source.url, license=work.source.license,
+        license_evidence=work.license_evidence or work.source.license_evidence or None, credit_line=work.credit,
         tags=sorted(work.tags),
         # Classical sits a little lower; WIT-FM's own music matches the pop shows.
         gain_db=cat.fixed_gain_db(lufs, peak, target_lufs=-18.0 if work.source.kind == "classical" else -16.0),
