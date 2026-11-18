@@ -2,27 +2,34 @@ import sys
 import unittest
 from datetime import datetime
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "mac"))
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(PROJECT_ROOT / "mac"))
 import api_server  # noqa: E402
 
-
-class FixedDatetime(datetime):
-    @classmethod
-    def now(cls, tz=None):
-        return cls(2026, 5, 5, 17, 0)
+WIT_NEXT_SCHEDULE = PROJECT_ROOT / "config" / "wit_next_schedule.yaml"
 
 
 class ApiServerTests(unittest.TestCase):
     def test_schedule_upcoming_uses_exact_next_airings(self):
-        with patch.object(api_server, "datetime", FixedDatetime):
-            info = api_server.get_schedule_info()
+        station = SimpleNamespace(schedule_path=WIT_NEXT_SCHEDULE)
+        with patch.object(api_server, "STATION", station):
+            # Wednesday Nov 18, 2026, 4:45 PM Eastern
+            info = api_server.get_schedule_info(datetime(2026, 11, 18, 16, 45))
 
-        self.assertEqual(info["current"]["show_id"], "crosswire")
-        self.assertEqual(info["upcoming"][0]["show_id"], "sonic_archaeology")
-        self.assertEqual(info["upcoming"][0]["starts_around"], "18:00")
-        self.assertEqual(info["upcoming"][0]["starts_at"], "2026-05-05T18:00:00")
+        self.assertEqual(info["timezone"], "America/New_York")
+        self.assertEqual(info["current"]["show_id"], "market_closing_tape")
+        self.assertEqual(info["current"]["program"], "market")
+        self.assertEqual(info["upcoming"][0]["show_id"], "ying_yang")
+        self.assertEqual(info["upcoming"][0]["starts_around"], "17:00")
+        self.assertEqual(info["upcoming"][0]["starts_at"], "2026-11-18T17:00:00")
+        self.assertEqual(info["upcoming"][0]["starts_at_utc"], "2026-11-18T22:00:00+00:00")
+        self.assertEqual(
+            [u["show_id"] for u in info["upcoming"]],
+            ["ying_yang", "office_hours", "monster_mix", "bedtime_early"],
+        )
 
     def test_station_prefixed_now_playing_route_is_resolved(self):
         self.assertEqual(

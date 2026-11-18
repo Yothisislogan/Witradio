@@ -16,7 +16,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from station_config import load_station_config
@@ -510,13 +510,18 @@ def get_now_playing() -> dict:
     return data
 
 
-def get_schedule_info() -> dict:
-    """Get current and upcoming show schedule."""
+def get_schedule_info(now: datetime | None = None) -> dict:
+    """Get current and upcoming show schedule.
+
+    `starts_at` is wall-clock time in the schedule's timezone (named in
+    `timezone`); `starts_at_utc` is the same instant with an offset, for
+    clients that convert to the listener's local time.
+    """
     try:
         from schedule import load_schedule
         schedule_path = STATION.schedule_path
         schedule = load_schedule(schedule_path)
-        now = datetime.now()
+        now = schedule.to_wall(now)
         current = schedule.resolve(now)
 
         # Find exact upcoming airings. next_airings() includes the current one first.
@@ -526,16 +531,21 @@ def get_schedule_info() -> dict:
             upcoming.append({
                 "show_id": future_show.show_id,
                 "name": future_show.name,
+                "title": schedule.resolve(starts_at).title,
                 "host": future_show.host,
                 "topic_focus": future_show.topic_focus,
                 "starts_at": starts_at.isoformat(),
+                "starts_at_utc": schedule.localize(starts_at).astimezone(timezone.utc).isoformat(),
                 "starts_around": starts_at.strftime("%H:%M"),
             })
 
         return {
+            "timezone": schedule.timezone,
             "current": {
                 "show_id": current.show_id,
                 "name": current.name,
+                "title": current.title,
+                "program": current.program,
                 "description": current.description,
                 "host": current.host,
                 "topic_focus": current.topic_focus,

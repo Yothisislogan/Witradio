@@ -212,7 +212,9 @@ def sweep_stale_slots(current_show_id: str, current_slot: str) -> None:
     """At startup, archive any slot folder whose start-time is past and isn't current."""
     if not TALK_DIR.exists():
         return
-    now = datetime.now()
+    # Slot keys are wall-clock times in the schedule's timezone, which may not
+    # be the server's (wit-next is pinned to America/New_York).
+    now = load_schedule(SCHEDULE_PATH).now()
     for show_dir in TALK_DIR.iterdir():
         if not show_dir.is_dir():
             continue

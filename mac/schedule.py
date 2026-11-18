@@ -4,7 +4,12 @@ WRIT-FM Weekly Scheduling
 
 Loads `config/schedule.yaml` and resolves the currently-active show based on:
 - day of week (mon..sun)
-- local time (HH:MM)
+- wall-clock time (HH:MM) in the schedule's `timezone`
+
+`timezone: local` (the default) uses the server's local time. An IANA name
+such as `America/New_York` pins the grid to that zone no matter where the
+server runs. Times passed in without tzinfo are read as wall-clock times in
+the schedule's zone; aware datetimes are converted.
 
 The streamer can use this to:
 - pick the host persona and topic focus
@@ -15,11 +20,12 @@ The streamer can use this to:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone as dt_timezone, tzinfo
 import os
 from pathlib import Path
 import re
-from typing import Any
+from typing import Any, Iterator
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import yaml
 
@@ -37,6 +43,22 @@ VALID_SEGMENT_TYPES = {
 
 class ScheduleError(RuntimeError):
     pass
+
+
+LOCAL_TIMEZONE = "local"
+
+
+def _parse_timezone(value: Any) -> tuple[str, tzinfo | None]:
+    """Return (name, tzinfo). tzinfo is None for the server's local time."""
+    if value is None:
+        return LOCAL_TIMEZONE, None
+    name = str(value).strip()
+    if not name or name.lower() == LOCAL_TIMEZONE:
+        return LOCAL_TIMEZONE, None
+    try:
+        return name, ZoneInfo(name)
+    except (ZoneInfoNotFoundError, ValueError) as exc:
+        raise ScheduleError(f"Unknown timezone {name!r} (use an IANA name or 'local')") from exc
 
 
 def _parse_time_hhmm(value: str) -> int:
@@ -121,6 +143,10 @@ class Show:
     segment_after_tracks: int = 1
     podcasts_enabled: bool = False
     music: dict[str, Any] = field(default_factory=dict)
+    # Format-hours shows: which producer runs the show (classical, monster_mix,
+    # miles, ...) and that producer's settings.
+    program: str = ""
+    params: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -129,6 +155,7 @@ class ScheduleBlock:
     end_minute: int
     show_id: str
     days: set[int] | None = None  # None => every day (base)
+    title: str | None = None  # on-air title for this slot, e.g. "Nocturne: Sunday Sacred"
 
     def is_cross_midnight(self) -> bool:
         return self.end_minute < self.start_minute
@@ -169,6 +196,31 @@ class ResolvedShow:
     podcasts_enabled: bool = False
     podcast_hours: set[int] = field(default_factory=set)
     music_profile: dict[str, Any] = field(default_factory=dict)
+    title: str = ""  # block title if the slot has one, else the show name
+    program: str = ""
+    params: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class ProgramBlock:
+    """A contiguous run of one show, merged across schedule-block boundaries.
+
+    Friday's 23:00-05:00 Nocturne and Saturday's 05:00-07:00 extension are one
+    ProgramBlock from Friday 23:00 to Saturday 07:00. `start` and `end` are
+    wall-clock times in the schedule's zone; `seconds` is real elapsed time,
+    so a block that spans a DST change is an hour shorter or longer than its
+    wall-clock span.
+    """
+
+    show_id: str
+    start: datetime
+    end: datetime
+    seconds: float
+    title: str
+
+    @property
+    def hours(self) -> float:
+        return self.seconds / 3600.0
 
 
 @dataclass
@@ -177,6 +229,40 @@ class StationSchedule:
     base: list[ScheduleBlock]
     overrides: list[ScheduleBlock]
     podcast_hours: set[int] = field(default_factory=set)
+    timezone: str = LOCAL_TIMEZONE
+    tz: tzinfo | None = None
+
+    # ── time helpers ────────────────────────────────────────────
+
+    def now(self) -> datetime:
+        """Current wall-clock time in the schedule's zone (naive)."""
+        if self.tz is None:
+            return datetime.now()
+        return datetime.now(self.tz).replace(tzinfo=None)
+
+    def to_wall(self, when: datetime | None = None) -> datetime:
+        """Naive wall-clock time in the schedule's zone for `when`."""
+        if when is None:
+            return self.now()
+        if when.tzinfo is None:
+            return when
+        if self.tz is None:
+            return when.astimezone().replace(tzinfo=None)
+        return when.astimezone(self.tz).replace(tzinfo=None)
+
+    def localize(self, wall: datetime) -> datetime:
+        """Attach the schedule's zone to a naive wall-clock time."""
+        if wall.tzinfo is not None:
+            return wall
+        if self.tz is None:
+            return wall.astimezone()
+        return wall.replace(tzinfo=self.tz)
+
+    def real_seconds(self, start_wall: datetime, end_wall: datetime) -> float:
+        """Elapsed seconds between two wall-clock times, honouring DST."""
+        a = self.localize(start_wall).astimezone(dt_timezone.utc)
+        b = self.localize(end_wall).astimezone(dt_timezone.utc)
+        return (b - a).total_seconds()
 
     def validate(self) -> None:
         if not self.base:
@@ -202,6 +288,26 @@ class StationSchedule:
             raise ScheduleError(
                 f"schedule.base overlaps itself (first overlap at {first // 60:02d}:{first % 60:02d})"
             )
+
+        # Overrides on the same day must not overlap: the first match would
+        # silently win and hide the other block.
+        week = [[None] * 1440 for _ in range(7)]
+        for block in self.overrides:
+            for day in sorted(block.days or ()):
+                spans: list[tuple[int, int, int]] = []
+                if block.end_minute > block.start_minute:
+                    spans.append((day, block.start_minute, block.end_minute))
+                else:
+                    spans.append((day, block.start_minute, 1440))
+                    spans.append(((day + 1) % 7, 0, block.end_minute))
+                for d, a, b in spans:
+                    for m in range(a, b):
+                        if week[d][m] is not None:
+                            raise ScheduleError(
+                                f"schedule.overrides overlap on {INDEX_TO_DAY[d]} at "
+                                f"{m // 60:02d}:{m % 60:02d} ({week[d][m]} and {block.show_id})"
+                            )
+                        week[d][m] = block.show_id
 
         # Show references exist
         for block in self.base + self.overrides:
@@ -230,7 +336,7 @@ class StationSchedule:
         raise ScheduleError("No matching schedule block for current time (base clock may be invalid)")
 
     def resolve(self, now: datetime | None = None) -> ResolvedShow:
-        now = now or datetime.now()
+        now = self.to_wall(now)
         block = self._matching_block(now)
         show = self.shows[block.show_id]
         return ResolvedShow(
@@ -242,11 +348,14 @@ class StationSchedule:
             segment_types=list(show.segment_types),
             bumper_style=show.bumper_style,
             voices=dict(show.voices),
+            title=block.title or show.name,
+            program=show.program,
+            params=dict(show.params),
         )
 
     def airing_start(self, now: datetime | None = None) -> datetime:
         """Return the datetime when the currently-matching block began airing."""
-        now = now or datetime.now()
+        now = self.to_wall(now)
         block = self._matching_block(now)
         start_h, start_m = divmod(block.start_minute, 60)
         minute = now.hour * 60 + now.minute
@@ -271,28 +380,95 @@ class StationSchedule:
     ) -> list[tuple[str, datetime]]:
         """Return the next `count` airings as (show_id, start_datetime).
 
-        The currently-active airing is the first entry. Walks forward in
-        5-minute steps, recording each time (show_id, airing_start) changes.
+        The currently-active airing is the first entry. Only schedule-block
+        boundaries and midnights can change the airing, so it checks those
+        instead of stepping through the clock.
         """
-        now = now or datetime.now()
+        now = self.to_wall(now)
         airings: list[tuple[str, datetime]] = []
         last_key: tuple[str, datetime] | None = None
-        t = now
         end = now + timedelta(hours=horizon_hours)
-        step = timedelta(minutes=5)
-        while t <= end and len(airings) < count:
-            try:
-                resolved = self.resolve(t)
-                start_dt = self.airing_start(t)
-            except ScheduleError:
-                t += step
-                continue
-            key = (resolved.show_id, start_dt)
+        for t, _ in self._change_points(now, end):
+            if len(airings) >= count:
+                break
+            block = self._matching_block(t)
+            key = (block.show_id, self.airing_start(t))
             if key != last_key:
                 airings.append(key)
                 last_key = key
-            t += step
         return airings
+
+    def _boundary_minutes(self) -> list[int]:
+        minutes = {0}
+        for block in self.base + self.overrides:
+            minutes.add(block.start_minute)
+            minutes.add(block.end_minute % 1440)
+        return sorted(minutes)
+
+    def _change_points(self, start: datetime, end: datetime) -> Iterator[tuple[datetime, ScheduleBlock]]:
+        """Yield (time, block) at `start` and at every boundary in (start, end).
+
+        Between two consecutive change points the matching block cannot change.
+        """
+        start = start.replace(second=0, microsecond=0)
+        yield start, self._matching_block(start)
+        minutes = self._boundary_minutes()
+        day = start.replace(hour=0, minute=0)
+        while day < end:
+            for minute in minutes:
+                t = day + timedelta(minutes=minute)
+                if start < t < end:
+                    yield t, self._matching_block(t)
+            day += timedelta(days=1)
+
+    def program_blocks(self, start: datetime, end: datetime) -> list[ProgramBlock]:
+        """Contiguous runs of each show between `start` and `end` (wall clock).
+
+        Runs are clipped to the window, so pass a window wider than the blocks
+        you care about. Adjacent schedule blocks with the same show merge.
+        """
+        start = self.to_wall(start)
+        end = self.to_wall(end)
+        if end <= start:
+            return []
+        runs: list[list[Any]] = []  # [show_id, start, end, title]
+        for t, block in self._change_points(start, end):
+            title = block.title or self.shows[block.show_id].name
+            if runs and runs[-1][0] == block.show_id:
+                continue
+            if runs:
+                runs[-1][2] = t
+            runs.append([block.show_id, t, end, title])
+        return [
+            ProgramBlock(
+                show_id=show_id,
+                start=a,
+                end=b,
+                seconds=self.real_seconds(a, b),
+                title=title,
+            )
+            for show_id, a, b, title in runs
+        ]
+
+    def program_block_at(self, when: datetime | None = None) -> ProgramBlock:
+        """The full merged block airing at `when` (looks up to 2 days each way)."""
+        when = self.to_wall(when)
+        for block in self.program_blocks(when - timedelta(days=2), when + timedelta(days=2)):
+            if block.start <= when < block.end:
+                return block
+        raise ScheduleError("No program block found around the requested time")
+
+    def weekly_hours(self, monday: datetime | None = None) -> dict[str, float]:
+        """Real hours per show_id over one Monday-00:00 to Monday-00:00 week."""
+        if monday is None:
+            today = self.now()
+            monday = (today - timedelta(days=today.weekday())).replace(
+                hour=0, minute=0, second=0, microsecond=0
+            )
+        totals: dict[str, float] = {}
+        for block in self.program_blocks(monday, monday + timedelta(days=7)):
+            totals[block.show_id] = totals.get(block.show_id, 0.0) + block.hours
+        return totals
 
 
 def slot_key(airing_start: datetime) -> str:
@@ -336,10 +512,18 @@ def load_schedule(path: Path) -> StationSchedule:
         if not name or not description:
             raise ScheduleError(f"Show {show_id}: missing name/description")
 
+        # Format-hours shows name the producer that runs them.
+        program = str(cfg.get("program", "") or "").strip()
+        params_raw = cfg.get("params", {})
+        if params_raw is None:
+            params_raw = {}
+        if not isinstance(params_raw, dict):
+            raise ScheduleError(f"Show {show_id}: params must be a mapping")
+
         # Talk-show fields
         host = str(cfg.get("host", "liminal_operator")).strip()
         topic_focus = str(cfg.get("topic_focus", "")).strip()
-        segment_types_raw = cfg.get("segment_types", ["deep_dive"])
+        segment_types_raw = cfg.get("segment_types", [] if program else ["deep_dive"])
         if not isinstance(segment_types_raw, list):
             raise ScheduleError(f"Show {show_id}: segment_types must be a list")
         segment_types = [str(s).strip() for s in segment_types_raw]
@@ -365,6 +549,8 @@ def load_schedule(path: Path) -> StationSchedule:
             segment_after_tracks=segment_after_tracks,
             podcasts_enabled=podcasts_enabled,
             music=dict(music) if music else {},
+            program=program,
+            params=dict(params_raw),
         )
 
     # Legacy podcasts config (optional)
@@ -403,16 +589,23 @@ def load_schedule(path: Path) -> StationSchedule:
         if not show_id:
             raise ScheduleError("Schedule block missing `show`")
         days = _parse_days(cfg.get("days")) if day_aware else None
-        return ScheduleBlock(start_minute=start, end_minute=end, show_id=show_id, days=days)
+        title = str(cfg.get("title", "") or "").strip() or None
+        return ScheduleBlock(
+            start_minute=start, end_minute=end, show_id=show_id, days=days, title=title
+        )
 
     base_blocks = [_parse_block(item, day_aware=False) for item in base_raw]
     override_blocks = [_parse_block(item, day_aware=True) for item in overrides_raw]
+
+    tz_name, tz = _parse_timezone(payload.get("timezone"))
 
     schedule = StationSchedule(
         shows=shows,
         base=base_blocks,
         overrides=override_blocks,
         podcast_hours=podcast_hours,
+        timezone=tz_name,
+        tz=tz,
     )
     schedule.validate()
     return schedule
@@ -439,6 +632,8 @@ def _cli() -> int:
 
     sub.add_parser("shows", help="List all shows")
 
+    sub.add_parser("week", help="Print the merged weekly grid and hours per show")
+
     args = parser.parse_args()
 
     schedule = load_schedule(Path(args.schedule).expanduser())
@@ -451,7 +646,23 @@ def _cli() -> int:
             print(f"  {sid:25s} host={show.host:20s} {show.name}")
         return 0
 
-    when = datetime.now()
+    if args.cmd == "week":
+        today = schedule.now()
+        monday = (today - timedelta(days=today.weekday())).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        print(f"Timezone: {schedule.timezone}")
+        for block in schedule.program_blocks(monday, monday + timedelta(days=7)):
+            print(
+                f"  {INDEX_TO_DAY[block.start.weekday()]} {block.start:%H:%M}-{block.end:%H:%M}"
+                f"  {block.hours:5.2f}h  {block.title}"
+            )
+        print("Hours per show:")
+        for show_id, hours in sorted(schedule.weekly_hours(monday).items(), key=lambda kv: -kv[1]):
+            print(f"  {show_id:30s} {hours:6.2f}")
+        return 0
+
+    when = schedule.now()
     if args.cmd == "now" and args.at:
         try:
             when = datetime.strptime(args.at, "%Y-%m-%d %H:%M")

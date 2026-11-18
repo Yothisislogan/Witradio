@@ -1,0 +1,289 @@
+timezone: America/New_York
+
+# WIT-FM format hours, from the show bible (Nov 17, 2026).
+#
+# The broadcast day starts at 5:00 AM Eastern. `base` is the weekday grid and
+# runs every day; Saturday and Sunday override 05:00-23:00. Every night's
+# 23:00-05:00 Nocturne comes from the base, and it merges with the weekend
+# extensions, so Friday's Nocturne runs to 07:00 Saturday and Saturday's to
+# 08:00 Sunday.
+#
+# Weekly totals this grid must keep (tests/test_wit_next_schedule.py):
+#   classical 93.75 h (56% of 168), Monster Mix 18.5 h.
+#
+# `program` names the producer that fills the show; `params` are its settings.
+# Classical blocks stay locked until the cleared lossless library reaches
+# `unlock_hours`; until then the slot runs `fallback_show`.
+
+shows:
+
+  # ── Classical, hosted by Count Ambrose Vale ───────────────────────────────
+
+  nocturne:
+    name: "Nocturne"
+    description: "Whole classical works overnight in lossless, hosted live by a 337-year-old vampire."
+    host: "count"
+    program: "classical"
+    params:
+      block: "nocturne"
+      unlock_hours: 100
+      fallback_show: "monster_mix"
+      max_link_seconds: 90
+
+  classical_day_shift:
+    name: "Classical: Day Shift"
+    description: "Works under 30 minutes, calm and focus-friendly, on links the Count recorded last night."
+    host: "count"
+    program: "classical"
+    params:
+      block: "day_shift"
+      unlock_hours: 200
+      fallback_show: "monster_mix"
+      links: "prerecorded"
+      max_work_minutes: 30
+      back_announce_seconds: 20
+      back_announce_every_minutes: 30
+
+  evening_concert:
+    name: "Classical: Evening Concert"
+    description: "A full concert program, read by the Count as he wakes at dusk."
+    host: "count"
+    program: "classical"
+    params:
+      block: "evening_concert"
+      unlock_hours: 100
+      fallback_show: "monster_mix"
+      template: "concert"
+
+  saturday_matinee:
+    name: "Classical: Saturday Matinee"
+    description: "The big ones: complete cycles in order, the Goldberg Variations, oratorio and opera where cleared recordings exist."
+    host: "count"
+    program: "classical"
+    params:
+      block: "matinee"
+      unlock_hours: 300
+      fallback_show: "monster_mix"
+      intro: "per_work"
+
+  sunday_concert_hall:
+    name: "Classical: Sunday Concert Hall"
+    description: "Sacred, choral and symphonic works, plus the week's most-requested."
+    host: "count"
+    program: "classical"
+    params:
+      block: "concert_hall"
+      unlock_hours: 300
+      fallback_show: "monster_mix"
+      intro: "per_work"
+
+  # ── Monster Mix, hosted by Wit ────────────────────────────────────────────
+
+  monster_mix:
+    name: "Monster Mix"
+    description: "AI music that drifts one genre step at a time, hosted by Wit, the WIT monster."
+    host: "wit"
+    program: "monster_mix"
+    params:
+      engine: "drift"
+      landmark_every: 4
+      max_break_seconds: 30
+      energy_bpm:
+        weekday_morning: [95, 115]
+        evening_and_weekend: [100, 125]
+
+  # ── The Stacks, hosted by Steve ───────────────────────────────────────────
+
+  the_stacks:
+    name: "The Stacks with Steve"
+    description: "Library of Congress recordings straight off the shelf, then re-cut over fresh beats."
+    host: "steve"
+    program: "stacks"
+    params:
+      format: "hour_clock"
+      require_year: true
+
+  stacks_crate_dig:
+    name: "The Stacks: Saturday Crate Dig"
+    description: "The long-form Stacks: one theme, deeper cuts, more remixes."
+    host: "steve"
+    program: "stacks"
+    params:
+      format: "crate_dig"
+      require_year: true
+
+  # ── Ying & Yang ───────────────────────────────────────────────────────────
+
+  ying_yang:
+    name: "Ying & Yang"
+    description: "Sports debate: unhinged takes, impeccable manners."
+    host: "ying_yang"
+    program: "ying_yang"
+    params:
+      hosts: ["ying", "yang"]
+      format: "hour_clock"
+      feeds: ["sports_news", "scores_api"]
+      fact_check: "fail_closed"
+
+  ying_yang_receipts:
+    name: "Ying & Yang: Receipts"
+    description: "A full audit of the week's predictions, graded against the scores feed."
+    host: "ying_yang"
+    program: "ying_yang"
+    params:
+      hosts: ["ying", "yang"]
+      format: "receipts"
+      feeds: ["scores_api"]
+      fact_check: "fail_closed"
+
+  # ── The Market, hosted by Dottie Sterling ─────────────────────────────────
+
+  market_opening_bell:
+    name: "The Market: Opening Bell"
+    description: "The 8:30 AM releases, today's calendar and one story to watch."
+    host: "dottie"
+    program: "market"
+    params:
+      format: "opening_bell"
+      fact_check: "fail_closed"
+      disclaimer: true
+
+  market_closing_tape:
+    name: "The Market: Closing Tape"
+    description: "The closes, the day's driver, and what it means for your wallet."
+    host: "dottie"
+    program: "market"
+    params:
+      format: "closing_tape"
+      fact_check: "fail_closed"
+      disclaimer: true
+
+  market_week_ahead:
+    name: "The Market: Week Ahead"
+    description: "The week's calendar and one deeper explainer."
+    host: "dottie"
+    program: "market"
+    params:
+      format: "week_ahead"
+      fact_check: "fail_closed"
+      disclaimer: true
+
+  # ── Miles with Logan ──────────────────────────────────────────────────────
+
+  miles_dawn:
+    name: "Miles with Logan: Dawn Miles"
+    description: "Run and walk sessions on tempo-locked music, coached by Logan."
+    host: "logan"
+    program: "miles"
+    params:
+      sessions: ["walk_it_out", "intervals", "pyramid", "route_of_the_day"]
+
+  miles_lunch_walk:
+    name: "Miles with Logan: Lunch Walk"
+    description: "A lunch-hour walk on tempo-locked music."
+    host: "logan"
+    program: "miles"
+    params:
+      sessions: ["walk_it_out", "route_of_the_day"]
+
+  miles_long_slow_saturday:
+    name: "Miles with Logan: Long Slow Saturday"
+    description: "Ninety steady minutes at 150-160 BPM, lyric-light, minimal talk."
+    host: "logan"
+    program: "miles"
+    params:
+      sessions: ["long_slow_saturday"]
+
+  miles_recovery_sunday:
+    name: "Miles with Logan: Recovery Sunday"
+    description: "An easy walk at 105-115 BPM, then a ten-minute stretch over an ambient bed."
+    host: "logan"
+    program: "miles"
+    params:
+      sessions: ["recovery_sunday"]
+
+  # ── Office Hours, hosted by Professor Ex ──────────────────────────────────
+
+  office_hours:
+    name: "Office Hours with Professor Ex"
+    description: "Insurance lectures, licensing prep and claim stories."
+    host: "professor_ex"
+    program: "office_hours"
+    params:
+      format: "hour_clock"
+      reviewed_question_bank: true
+
+  exam_cram:
+    name: "Professor Ex: Exam Cram"
+    description: "Twenty-five licensing-exam practice questions, back to back."
+    host: "professor_ex"
+    program: "office_hours"
+    params:
+      format: "exam_cram"
+      questions: 25
+      reviewed_question_bank: true
+
+  # ── Hushworth's Bedtime Stories ───────────────────────────────────────────
+
+  bedtime_early:
+    name: "Bedtime Stories: Early Seating"
+    description: "Sir Reginald Hushworth reads gentle public-domain stories for kids and families."
+    host: "hushworth"
+    program: "bedtime"
+    params:
+      seating: "early"
+      audience: "families"
+      promos: false
+      listener_submissions: false
+
+  bedtime_late:
+    name: "Bedtime Stories: Late Seating"
+    description: "Poe, M.R. James, Sherlock Holmes and other public-domain tales for grown-ups."
+    host: "hushworth"
+    program: "bedtime"
+    params:
+      seating: "late"
+      audience: "adults"
+
+schedule:
+  # The weekday grid, 05:00 to 05:00.
+  base:
+    - { start: "05:00", end: "07:00", show: "miles_dawn" }
+    - { start: "07:00", end: "09:00", show: "monster_mix" }
+    - { start: "09:00", end: "09:15", show: "market_opening_bell" }
+    - { start: "09:15", end: "12:00", show: "classical_day_shift" }
+    - { start: "12:00", end: "13:00", show: "miles_lunch_walk" }
+    - { start: "13:00", end: "15:00", show: "the_stacks" }
+    - { start: "15:00", end: "16:30", show: "classical_day_shift" }
+    - { start: "16:30", end: "17:00", show: "market_closing_tape" }
+    - { start: "17:00", end: "18:00", show: "ying_yang" }
+    - { start: "18:00", end: "19:00", show: "office_hours" }
+    - { start: "19:00", end: "19:30", show: "monster_mix" }
+    - { start: "19:30", end: "20:00", show: "bedtime_early" }
+    - { start: "20:00", end: "22:00", show: "evening_concert" }
+    - { start: "22:00", end: "23:00", show: "bedtime_late" }
+    - { start: "23:00", end: "05:00", show: "nocturne" }
+
+  overrides:
+    # Saturday broadcast day
+    - { days: ["sat"], start: "05:00", end: "07:00", show: "nocturne", title: "Nocturne (the Count sleeps in)" }
+    - { days: ["sat"], start: "07:00", end: "08:30", show: "miles_long_slow_saturday" }
+    - { days: ["sat"], start: "08:30", end: "10:00", show: "monster_mix" }
+    - { days: ["sat"], start: "10:00", end: "11:00", show: "ying_yang_receipts" }
+    - { days: ["sat"], start: "11:00", end: "13:00", show: "stacks_crate_dig" }
+    - { days: ["sat"], start: "13:00", end: "14:00", show: "exam_cram" }
+    - { days: ["sat"], start: "14:00", end: "19:30", show: "saturday_matinee" }
+    - { days: ["sat"], start: "19:30", end: "20:00", show: "bedtime_early" }
+    - { days: ["sat"], start: "20:00", end: "22:00", show: "evening_concert" }
+    - { days: ["sat"], start: "22:00", end: "23:00", show: "bedtime_late" }
+
+    # Sunday broadcast day
+    - { days: ["sun"], start: "05:00", end: "08:00", show: "nocturne", title: "Nocturne: Sunday Sacred" }
+    - { days: ["sun"], start: "08:00", end: "08:30", show: "miles_recovery_sunday" }
+    - { days: ["sun"], start: "08:30", end: "11:00", show: "monster_mix", title: "Monster Mix: Sunday Brunch" }
+    - { days: ["sun"], start: "11:00", end: "17:00", show: "sunday_concert_hall" }
+    - { days: ["sun"], start: "17:00", end: "17:30", show: "market_week_ahead" }
+    - { days: ["sun"], start: "17:30", end: "19:30", show: "monster_mix" }
+    - { days: ["sun"], start: "19:30", end: "20:00", show: "bedtime_early" }
+    - { days: ["sun"], start: "20:00", end: "22:00", show: "evening_concert" }
+    - { days: ["sun"], start: "22:00", end: "23:00", show: "bedtime_late" }
