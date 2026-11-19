@@ -281,6 +281,10 @@ The listener daemon polls for new messages every 30 seconds and generates spoken
 ├── config/office_hours.yaml    # Office Hours: curriculum, review policy, fixed lines
 ├── config/office_hours/        # Class material: lecture notes, terms, question bank, FAQ
 ├── web/ask-the-professor.html  # Listener questions for Office Hours (13+, reviewed)
+├── config/story_sources.yaml   # Bedtime Stories: the repertoire, and what's not in the books
+├── config/bedtime.yaml         # Bedtime Stories: the seatings, loudness, score
+├── config/bedtime_authors.yaml # What Hushworth may say about each author
+├── tools/pull_stories.py       # Public-domain stories into the story library
 ├── mac/
 │   ├── station_config.py        # Station config resolver and env exporter
 │   ├── playout_director.py     # wit-next: decides each item for Liquidsoap
@@ -308,6 +312,8 @@ The listener daemon polls for new messages every 30 seconds and generates spoken
 │   ├── produce_office_hours.py # Office Hours: drafted, reviewed, voiced; encores
 │   ├── office_hours.py         # Class material sign-offs and the episode review queue
 │   ├── ask_professor.py        # Listener questions, answered by a reviewer
+│   ├── produce_bedtime.py      # Bedtime Stories: both seatings, every voice, soft score
+│   ├── story_library.py        # Gutenberg intake, the publication gate, chapters
 │   ├── drift.py                # The Drift: one change per track
 │   ├── script_writer.py        # Host brief + facts -> JSON voice script
 │   ├── fact_check.py           # Every number and name must be in the facts

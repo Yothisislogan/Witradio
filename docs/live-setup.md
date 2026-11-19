@@ -585,7 +585,7 @@ due, and pushes the audio:
 | The Stacks | 36 h ahead, from the server's plans | Steve's talk, the remixes, speech samples and Then & Now (section 7.6) |
 | Miles with Logan | 20 h ahead, one session per cycle | Tempo-locked sessions with Logan's cues (section 7.7) |
 | Office Hours | Drafted 30 h ahead; voiced once approved | Signed class material, a review queue, encores (section 7.8) |
-| Bedtime Stories | Not built yet | Its slots play the safe library |
+| Bedtime Stories | 24 h ahead, a few files per cycle | Both seatings, from the story library (section 7.9) |
 
 Shows made close to air (The Market, Ying & Yang) run first in every
 cycle, so a long Miles or Stacks render never holds up The Tape. The Stacks
@@ -859,6 +859,54 @@ python3 mac/ask_professor.py answer 7 --reviewer "Jane Doe" --note "Sewer backup
 When no listener question is waiting, the segment answers a signed FAQ
 entry. As with the Miles Club, publish the privacy policy and set `ASK_URL`
 in the form before it goes live.
+
+### 7.9 Hushworth's Bedtime Stories
+
+Two seatings a night. The Early Seating (7:30 PM, 30 minutes, families) has
+a welcome, a 20-25 minute story, and a goodnight whose soft music runs to
+the end of the slot. It has no promos, no ads, no jump scares, and never
+invites listeners to send anything in. The Late Seating (10:00 PM, an hour,
+grown-ups) has a creak and a cold open ("Lock the door. No, the other
+door."), the story, a 2-minute afterword with one fact about the author,
+then a quiet bed to 11:00. During Dracula, the Count rings the booth to
+object to Stoker's "slander".
+
+**Stock the story library first.** On the Halo:
+
+```bash
+python3 tools/pull_stories.py sources
+```
+
+```bash
+python3 tools/pull_stories.py pull --all
+```
+
+This downloads each work in `config/story_sources.yaml` from Project
+Gutenberg (or reads a local file with `--file`). It checks that the file is
+the book named there, and refuses any edition or translation published after
+1930: no year, no reading. It strips every Gutenberg reference, then splits
+the text into chapters or stories. A work whose headings don't match its
+`split` pattern, or a collection missing a story in `select`, is reported;
+adjust the pattern or the titles and pull again. The Gutenberg numbers
+couldn't be checked from here, so run `pull --all` once and read the report.
+The Halo needs to reach `www.gutenberg.org`.
+
+**Readings.** Each seating works through its repertoire in the config's
+order. Serials continue night after night, short fables are bundled, and a
+story too long for the night is either abridged or split ("to be
+continued"). The model never rewrites the author. To abridge, it may only
+choose which whole paragraphs to keep, and the reading is announced as
+"adapted". To perform, it only labels who speaks each piece and how, so
+Hushworth can do every voice. What he says around the story comes from the
+work's credit ("from the public domain") and `config/bedtime_authors.yaml`.
+Any line that names something from the Disney or film versions (the list in
+`config/story_sources.yaml`) is replaced with a plain one.
+
+**Sound.** A soft bed from the music engine at 60-75 BPM runs under the
+whole reading as one continuous bed across its files, with rain, wind or
+fire where a story calls for it. The show sits at -20 LUFS, quieter than
+daytime, with a limiter holding every peak under -3 dBFS
+(`config/bedtime.yaml`).
 
 ## 8. Decisions due by the end of Phase 0
 

@@ -10,13 +10,11 @@ Each cycle:
    The Market (2 hours ahead, The Tape 20 minutes), Ying & Yang (2 hours),
    Monster Mix (12 hours), Miles with Logan (20 hours, one session per
    cycle), Office Hours (drafted 30 hours ahead for review, voiced once
-   approved), and Monster Mix for classical and Stacks slots that haven't
-   unlocked yet. The shows with the shortest lead go first, so a long render
-   never holds up The Tape;
+   approved), Bedtime Stories (24 hours ahead, a few files per cycle), and
+   Monster Mix for classical and Stacks slots that haven't unlocked yet. The
+   shows with the shortest lead go first, so a long render never holds up
+   The Tape;
 4. push the finished audio to the server.
-
-Shows without a producer yet (Bedtime Stories) are skipped; their slots fall
-back to the safe library.
 
     python3 mac/producer_daemon.py once
     python3 mac/producer_daemon.py loop --interval 300
@@ -39,6 +37,7 @@ from typing import Sequence
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from buffer_sync import Sync, SyncError  # noqa: E402
 from produce_classical import ClassicalLinks  # noqa: E402
+from produce_bedtime import BedtimeProducer  # noqa: E402
 from produce_market import MarketProducer  # noqa: E402
 from produce_miles import MilesProducer  # noqa: E402
 from produce_office_hours import OfficeHoursProducer  # noqa: E402
@@ -48,7 +47,7 @@ from produce_ying_yang import YingYangProducer  # noqa: E402
 from producers import Airing, Context, Result, upcoming_airings  # noqa: E402
 
 PRODUCERS = {"market": MarketProducer, "ying_yang": YingYangProducer, "monster_mix": MonsterMixProducer,
-             "miles": MilesProducer, "office_hours": OfficeHoursProducer}
+             "miles": MilesProducer, "office_hours": OfficeHoursProducer, "bedtime": BedtimeProducer}
 PLANNED = {"classical": ClassicalLinks, "stacks": StacksProducer}  # the server plans these; the Halo renders talk
 
 

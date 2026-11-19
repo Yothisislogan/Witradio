@@ -1,0 +1,30 @@
+# Hushworth's Bedtime Stories (show bible: "Hushworth's Bedtime Stories").
+#
+# Early Seating, 7:30 PM, 30 min: a 2-minute welcome, a 20-25 minute story,
+# a 3-minute goodnight over soft music. No promos, no ads, soft score, no
+# jump scares, and never an invitation to send anything in.
+# Late Seating, 10:00 PM, 1 hr: a cold-open line, the story, a 2-minute
+# afterword with one fact about the author, then a quiet bed to 11:00.
+# Tension allowed, but no sudden loud peaks: it's still bedtime.
+
+seatings:
+  early:
+    story_minutes: [20, 25]
+    welcome_seconds: 100
+    goodnight_seconds: 45  # Hushworth's goodnight; the soft music runs on to the end of the slot
+    bed_bpm: 62
+    bed_style: "a soft music box and celeste lullaby, warm strings, gentle and slow"
+  late:
+    story_minutes: [40, 50]
+    cold_open_seconds: 30
+    afterword_seconds: 110
+    bed_bpm: 66
+    bed_style: "low cello and piano, a dark and quiet nocturne, gentle tension, no percussion"
+
+words_per_minute: 125  # Hushworth reads slowly
+abridge_up_to: 1.6  # a story up to this much over length is abridged (and announced as adapted); longer ones split
+chunk_words: 650  # each file of the reading, about five minutes
+loudness: -20.0  # LUFS: lower than daytime (-16)
+limit_db: -3.0  # the limiter catches any sudden peak above this (17 dB over the loudness target)
+bed_db: -20.0  # the score sits this far under Hushworth
+credit: "from the public domain"

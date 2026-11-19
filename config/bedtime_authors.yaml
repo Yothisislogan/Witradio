@@ -1,0 +1,57 @@
+# What Hushworth may say about the authors: the Early Seating's welcome and
+# the Late Seating's afterword ("one fact about the author") are written only
+# from these lines. Keep to facts a reference book would back up.
+authors:
+  "Aesop":
+    - "Aesop is the name tradition gives to a storyteller of ancient Greece, said to have lived in the sixth century BC."
+    - "His fables were passed along by word of mouth for centuries before anyone wrote them down."
+  "Rudyard Kipling":
+    - "Rudyard Kipling was born in Bombay, India, in 1865."
+    - "Just So Stories was published in 1902."
+    - "In 1907 he won the Nobel Prize in Literature, the first writer in English to receive it."
+  "Beatrix Potter":
+    - "The Tale of Peter Rabbit began as an illustrated letter Beatrix Potter wrote in 1893 to a sick boy named Noel Moore."
+    - "She printed it herself in 1901 before Frederick Warne published it in 1902."
+  "Margery Williams":
+    - "Margery Williams was born in London in 1881."
+    - "The Velveteen Rabbit was first published in 1922."
+  "Jacob Grimm and Wilhelm Grimm":
+    - "Jacob and Wilhelm Grimm were German brothers and scholars who collected folk tales."
+    - "Their first collection of tales was published in 1812."
+    - "They also began a great dictionary of the German language."
+  "Hans Christian Andersen":
+    - "Hans Christian Andersen was born in Odense, Denmark, in 1805."
+    - "As a boy he went to Copenhagen hoping to become an actor and singer."
+  "Kenneth Grahame":
+    - "Kenneth Grahame worked at the Bank of England for nearly thirty years and rose to be its Secretary."
+    - "The Wind in the Willows grew out of bedtime stories he told his son, Alastair."
+    - "It was published in 1908."
+  "L. Frank Baum":
+    - "The Wonderful Wizard of Oz was published in 1900."
+    - "L. Frank Baum went on to write thirteen more books about Oz."
+  "Lewis Carroll":
+    - "Lewis Carroll was the pen name of Charles Lutwidge Dodgson, a mathematics lecturer at Christ Church, Oxford."
+    - "He first told the story of Alice on a boating trip in 1862."
+    - "Alice's Adventures in Wonderland was published in 1865."
+  "A. A. Milne":
+    - "Winnie-the-Pooh was published in 1926."
+    - "Its Christopher Robin was named for A. A. Milne's son, Christopher Robin Milne."
+  "Washington Irving":
+    - "Washington Irving was born in New York City in 1783."
+    - "The Legend of Sleepy Hollow first appeared in 1820, in The Sketch Book of Geoffrey Crayon, Gent."
+  "Robert Louis Stevenson":
+    - "Strange Case of Dr Jekyll and Mr Hyde was published in 1886."
+    - "Robert Louis Stevenson also wrote Treasure Island."
+    - "He died in Samoa in 1894."
+  "M. R. James":
+    - "Montague Rhodes James was a medieval scholar who became provost of King's College, Cambridge, and later of Eton."
+    - "He wrote many of his ghost stories to read aloud to friends at Christmas."
+  "Arthur Conan Doyle":
+    - "Arthur Conan Doyle trained as a doctor at the University of Edinburgh."
+    - "Sherlock Holmes first appeared in A Study in Scarlet in 1887."
+  "Bram Stoker":
+    - "Bram Stoker spent nearly thirty years as business manager of the Lyceum Theatre in London, for the actor Henry Irving."
+    - "Dracula was published in 1897."
+  "Edgar Allan Poe":
+    - "Edgar Allan Poe was born in Boston in 1809."
+    - "He died in Baltimore in 1849."

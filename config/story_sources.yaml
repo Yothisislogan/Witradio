@@ -1,0 +1,187 @@
+# Hushworth's Bedtime Stories: the repertoire (show bible: "The two seatings").
+#
+# tools/pull_stories.py downloads each work from Project Gutenberg (or reads a
+# local text with --file), checks it really is the book named here, strips
+# every Project Gutenberg reference (their trademark), splits it into
+# stories or chapters, and stores it in the story library. The gate: the
+# edition read on air, and any translation, must be published before 1931,
+# which makes it public domain in the US as of 2026. No year, no reading.
+#
+#   python3 tools/pull_stories.py sources
+#   python3 tools/pull_stories.py pull --all
+#
+# kind: serial (chapters read night after night), collection (pick stories by
+# title, one or a few a night) or single. split: a regular expression matching
+# the heading line that starts each chapter or story. select: the stories to
+# take from a collection, in reading order (matched by heading, ignoring case
+# and punctuation). seating: early (families) or late (grown-ups).
+
+works:
+  # ── Early Seating: kids and families ──
+  aesop:
+    title: "The Aesop for Children"
+    author: "Aesop"
+    edition: "illustrated by Milo Winter"
+    published: 1919
+    gutenberg: 19994
+    seating: early
+    kind: collection
+    split: '^[A-Z][A-Za-z,'' -]+$'
+    bundle: true  # short fables, several a night, each with its moral
+  just_so:
+    title: "Just So Stories"
+    author: "Rudyard Kipling"
+    published: 1902
+    gutenberg: 2781
+    seating: early
+    kind: collection
+    split: '^(HOW|THE) [A-Z ,'']+$'
+  peter_rabbit:
+    title: "The Tale of Peter Rabbit"
+    author: "Beatrix Potter"
+    published: 1902
+    gutenberg: 14838
+    seating: early
+    kind: single
+  velveteen_rabbit:
+    title: "The Velveteen Rabbit"
+    author: "Margery Williams"
+    published: 1922
+    gutenberg: 11757
+    seating: early
+    kind: single
+  grimm:
+    title: "Grimms' Fairy Tales"
+    author: "Jacob Grimm and Wilhelm Grimm"
+    translator: "Edgar Taylor and Marian Edwardes"
+    translated: 1853
+    published: 1853
+    gutenberg: 2591
+    seating: early
+    kind: collection
+    split: '^[A-Z][A-Z ,''\-\[\]]+$'
+    select: ["The Elves and the Shoemaker", "The Travelling Musicians", "The Golden Goose", "The Frog-Prince",
+             "The Twelve Dancing Princesses", "The Straw, the Coal, and the Bean"]
+  andersen:
+    title: "Andersen's Fairy Tales"
+    author: "Hans Christian Andersen"
+    translator: "H. P. Paull"
+    translated: 1872
+    published: 1872
+    gutenberg: 1597
+    seating: early
+    kind: collection
+    split: '^[A-Z][A-Z ,''\-]+$'
+    select: ["The Ugly Duckling", "The Princess and the Pea", "Little Tiny or Thumbelina",
+             "The Emperor's New Clothes"]
+  wind_willows:
+    title: "The Wind in the Willows"
+    author: "Kenneth Grahame"
+    published: 1908
+    gutenberg: 289
+    seating: early
+    kind: serial
+    split: '^(CHAPTER [IVXLC]+\.?|[IVXLC]+\.)\s*$|^(CHAPTER [IVXLC]+\.? .+)$'
+  oz:
+    title: "The Wonderful Wizard of Oz"
+    author: "L. Frank Baum"
+    published: 1900
+    gutenberg: 55
+    seating: early
+    kind: serial
+    split: '^Chapter [IVXLC]+$'
+  alice:
+    title: "Alice's Adventures in Wonderland"
+    author: "Lewis Carroll"
+    published: 1865
+    gutenberg: 11
+    seating: early
+    kind: serial
+    split: '^CHAPTER [IVXLC]+\.'
+  pooh:
+    title: "Winnie-the-Pooh"
+    author: "A. A. Milne"
+    published: 1926
+    gutenberg: 67098
+    seating: early
+    kind: serial
+    split: '^CHAPTER [IVXLC]+'
+
+  # ── Late Seating: grown-ups ──
+  sleepy_hollow:
+    title: "The Legend of Sleepy Hollow"
+    author: "Washington Irving"
+    published: 1820
+    gutenberg: 41
+    seating: late
+    kind: single
+    ambience: wind
+  jekyll_hyde:
+    title: "The Strange Case of Dr. Jekyll and Mr. Hyde"
+    author: "Robert Louis Stevenson"
+    published: 1886
+    gutenberg: 43
+    seating: late
+    kind: serial
+    split: '^[A-Z][A-Z .''’]+$'
+    ambience: rain
+  ghost_stories:
+    title: "Ghost Stories of an Antiquary"
+    author: "M. R. James"
+    published: 1904
+    gutenberg: 8486
+    seating: late
+    kind: collection
+    split: '^[A-Z][A-Z ,''’\-]+$'
+    ambience: fire
+  sherlock:
+    title: "The Adventures of Sherlock Holmes"
+    author: "Arthur Conan Doyle"
+    published: 1892
+    gutenberg: 1661
+    seating: late
+    kind: collection
+    split: '^[IVXLC]+\. [A-Z].+$'
+    ambience: rain
+  poe:
+    title: "The Works of Edgar Allan Poe"
+    author: "Edgar Allan Poe"
+    edition: "the Raven Edition, volume 2"
+    published: 1903
+    gutenberg: 2148
+    seating: late
+    kind: collection
+    split: '^[A-Z][A-Z .,''\-]+$'
+    select: ["The Tell-Tale Heart", "The Cask of Amontillado", "The Masque of the Red Death",
+             "The Fall of the House of Usher", "The Black Cat", "The Pit and the Pendulum"]
+    ambience: rain
+  dracula:
+    title: "Dracula"
+    author: "Bram Stoker"
+    published: 1897
+    gutenberg: 345
+    seating: late
+    kind: serial
+    split: '^CHAPTER [IVXLC]+\s*$'
+    ambience: wind
+    count_calls_in: true  # the Count rings the booth to object to Stoker's "slander"
+
+# The Disney and film versions of Pooh, Oz and Alice are not free: no names,
+# songs or designs from them anywhere. Any script holding one of these is
+# refused. Add more as you find them.
+not_in_the_books:
+  - "Gopher"
+  - "Lumpy"
+  - "Kessie"
+  - "Darby"
+  - "ruby slippers"
+  - "Over the Rainbow"
+  - "Follow the Yellow Brick Road"
+  - "We're Off to See the Wizard"
+  - "Ding-Dong! The Witch Is Dead"
+  - "Elphaba"
+  - "Glinda the Good Witch of the North"
+  - "Unbirthday Song"
+  - "I'm Late"
+  - "Very Good Advice"
+  - "Disney"
