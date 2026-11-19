@@ -47,12 +47,7 @@ class MonsterMixProducer(Producer):
     lead_hours = 12.0  # music takes longest: work well ahead
 
     def generate(self, caption: str, out, seconds: float) -> bool:
-        engine: Callable[..., bool] | None = self.ctx.services.get("music")
-        if engine is None:
-            from music_gen_client import generate_music
-
-            return generate_music(caption, out, duration=seconds, audio_format="flac")
-        return engine(caption, out, seconds)
+        return self.make_music(caption, out, seconds)
 
     def produce(self, airing: Airing, now: datetime | None = None) -> Result:
         result = Result(show_id=airing.show_id, slot=airing.slot, status="done")

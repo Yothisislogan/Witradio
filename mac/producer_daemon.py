@@ -2,16 +2,18 @@
 """The producer daemon: runs on the Halo and makes every show before it airs.
 
 Each cycle:
-1. pull the server's classical plans and unlock status (if WRIT_SYNC_REMOTE is set);
-2. write and voice the Count's links for plans within 36 hours;
+1. pull the server's plans and unlock status (if WRIT_SYNC_REMOTE is set);
+2. render the planned shows' talk for plans within 36 hours: the Count's
+   links, and The Stacks' talk, remixes, speech samples and Then & Now
+   tracks (pulling the library recordings those re-cut first);
 3. for each upcoming airing whose lead time has come, run its producer:
    The Market (2 hours ahead, The Tape 20 minutes), Ying & Yang (2 hours),
-   Monster Mix (12 hours), and Monster Mix for classical slots that haven't
-   unlocked yet;
+   Monster Mix (12 hours), and Monster Mix for classical and Stacks slots
+   that haven't unlocked yet;
 4. push the finished audio to the server.
 
-Shows without a producer yet (The Stacks, Miles, Office Hours, Bedtime
-Stories) are skipped; their slots fall back to the safe library.
+Shows without a producer yet (Miles, Office Hours, Bedtime Stories) are
+skipped; their slots fall back to the safe library.
 
     python3 mac/producer_daemon.py once
     python3 mac/producer_daemon.py loop --interval 300
@@ -36,16 +38,18 @@ from buffer_sync import Sync, SyncError  # noqa: E402
 from produce_classical import ClassicalLinks  # noqa: E402
 from produce_market import MarketProducer  # noqa: E402
 from produce_monster_mix import MonsterMixProducer  # noqa: E402
+from produce_stacks import StacksProducer  # noqa: E402
 from produce_ying_yang import YingYangProducer  # noqa: E402
 from producers import Airing, Context, Result, upcoming_airings  # noqa: E402
 
 PRODUCERS = {"market": MarketProducer, "ying_yang": YingYangProducer, "monster_mix": MonsterMixProducer}
+PLANNED = {"classical": ClassicalLinks, "stacks": StacksProducer}  # the server plans these; the Halo renders talk
 
 
 class Daemon:
     def __init__(self, ctx: Context, sync: Sync | None = None):
         self.ctx, self.sync = ctx, sync
-        self.classical = ClassicalLinks(ctx)
+        self.planned = {name: cls(ctx) for name, cls in PLANNED.items()}
         self.producers = {name: cls(ctx) for name, cls in PRODUCERS.items()}
 
     def unlocked(self) -> dict[str, bool]:
@@ -53,13 +57,13 @@ class Daemon:
         try:
             return dict(json.loads(path.read_text()).get("unlocked") or {})
         except (OSError, json.JSONDecodeError):
-            return {}  # unknown: treat classical as locked, so its slot still gets Monster Mix
+            return {}  # unknown: treat planned shows as locked, so their slots still get Monster Mix
 
     def resolve(self, airing: Airing) -> tuple[Airing, str] | None:
         """The airing as a producer sees it, or None when nothing on the Halo makes it."""
-        if airing.program == "classical":
+        if airing.program in self.planned:
             if self.unlocked().get(airing.show_id):
-                return None  # the Count's links (from the plan) cover it
+                return None  # the plan's talk segments cover it
             fallback = str(airing.params.get("fallback_show", "monster_mix"))
             show = self.ctx.schedule.shows.get(fallback)
             if show is None:
@@ -76,10 +80,23 @@ class Daemon:
                 self.sync.pull()
             except SyncError as exc:
                 self.ctx.log(f"pull failed: {exc}")
-        try:
-            results += self.classical.produce_due(self.ctx.schedule.localize(now))
-        except Exception as exc:  # one bad plan shouldn't stop the other shows
-            self.ctx.log(f"classical links failed: {exc!r}")
+        aware = self.ctx.schedule.localize(now)
+        stacks = self.planned["stacks"]
+        missing = stacks.media_needed(aware) if self.ctx.library_dir is not None else []
+        if missing and self.sync:
+            try:
+                self.sync.pull_media(missing, self.ctx.library_dir)
+            except SyncError as exc:
+                self.ctx.log(f"library pull failed: {exc}")
+        for name, producer in self.planned.items():
+            try:
+                for result in producer.produce_due(aware):
+                    if result.segments or result.status != "done":
+                        self.ctx.log(f"{result.slot}: {result.status} {len(result.segments)} new"
+                                     + (f"; {result.problems[0]}" if result.problems else ""))
+                    results.append(result)
+            except Exception as exc:  # one bad plan shouldn't stop the other shows
+                self.ctx.log(f"{name} plans failed: {exc!r}")
         horizon = max(p.lead_hours for p in self.producers.values())
         for airing in upcoming_airings(self.ctx.schedule, now, horizon):
             resolved = self.resolve(airing)
@@ -130,7 +147,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         at = datetime.strptime(args.at, "%Y-%m-%d %H:%M")
         for airing in upcoming_airings(ctx.schedule, at, 1):
             if airing.show_id == args.show_id and airing.start == at:
-                resolved = daemon.resolve(airing) if airing.program == "classical" else (airing, airing.program)
+                resolved = daemon.resolve(airing) if airing.program in daemon.planned else (airing, airing.program)
+                if resolved is None and airing.program in daemon.planned:
+                    print(f"{args.show_id} is unlocked: its talk renders from the server's plan (run 'once')")
+                    return 1
                 if resolved is None or resolved[1] not in daemon.producers:
                     print(f"{args.show_id} has no producer on the Halo yet")
                     return 1

@@ -96,7 +96,7 @@ def voices_config(root: Path) -> Path:
     tone.write_text("import subprocess, sys\nsubprocess.run(['ffmpeg', '-y', '-v', 'error', '-f', 'lavfi', '-i', "
                     "'sine=frequency=330:duration=0.4', '-ac', '2', sys.argv[1]], check=True)\n")
     cards = "\n".join(f"  {host}: {{engine: tone, voice: {host}, words_per_second: 2.5}}"
-                      for host in ("count", "dottie", "ying", "yang", "wit"))
+                      for host in ("count", "dottie", "ying", "yang", "wit", "steve"))
     path = root / "voices.yaml"
     path.write_text(f"engines:\n  tone: {{transport: command, style: plain, command: \"{sys.executable} {tone} {{out}}\"}}\n"
                     f"voices:\n{cards}\n")

@@ -3,11 +3,15 @@
 
 Runs on the Halo. The server is the authority for plans, the Halo for audio:
 
-    pull    the server's buffer/plans/ (classical plans and _status.json)
-    push    the Halo's buffer to the server: show slots and the Count's links,
-            never plans/
+    pull    the server's buffer/plans/ (classical and Stacks plans, _status.json)
+    push    the Halo's buffer to the server: show slots and the plans' talk
+            segments, never plans/
     prune   delete slots and links that aired more than --days ago
             (run it on both machines)
+
+The producer daemon also pulls the library recordings a Stacks plan re-cuts
+(remixes, speech samples, Then & Now) into the Halo's library, by their
+library-relative paths, before it renders them.
 
 Files land with rsync --delay-updates, and half-written files are dot-names
 the director skips, so the playout only ever sees whole files.
@@ -15,7 +19,9 @@ the director skips, so the playout only ever sees whole files.
 WRIT_SYNC_REMOTE is the server's buffer folder as rsync sees it over SSH,
 e.g. witfm@hetzner-playout:/home/witfm/Witradio/output/stations/wit-next/buffer
 (a Tailscale MagicDNS name works as the host). WRIT_SYNC_SSH adds ssh
-options, e.g. "-i ~/.ssh/witfm_sync".
+options, e.g. "-i ~/.ssh/witfm_sync". WRIT_SYNC_LIBRARY_REMOTE is the server's
+library folder; by default it's WRIT_SYNC_REMOTE with buffer swapped for
+library, which matches the station layout.
 
     python3 mac/buffer_sync.py pull
     python3 mac/buffer_sync.py push
@@ -30,6 +36,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Sequence
@@ -42,17 +49,29 @@ class SyncError(RuntimeError):
     pass
 
 
+def library_remote_for(remote: str) -> str:
+    """The server's library folder, next to its buffer folder."""
+    remote = remote.rstrip("/")
+    head, _, tail = remote.rpartition("/")
+    return f"{head}/library" if tail == "buffer" and head else ""
+
+
 class Sync:
-    def __init__(self, local: Path, remote: str, *, ssh: str = "", rsync: str = "rsync", timeout: int = 900):
+    def __init__(self, local: Path, remote: str, *, ssh: str = "", rsync: str = "rsync", timeout: int = 900,
+                 library_remote: str | None = None):
         self.local, self.remote = Path(local), remote.rstrip("/")
         self.ssh, self.rsync, self.timeout = ssh, rsync, timeout
+        self.library_remote = (library_remote if library_remote is not None else library_remote_for(remote)).rstrip("/")
 
     @classmethod
     def from_env(cls, local: Path) -> "Sync | None":
         remote = os.environ.get("WRIT_SYNC_REMOTE", "").strip()
-        return cls(local, remote, ssh=os.environ.get("WRIT_SYNC_SSH", "")) if remote else None
+        if not remote:
+            return None
+        return cls(local, remote, ssh=os.environ.get("WRIT_SYNC_SSH", ""),
+                   library_remote=os.environ.get("WRIT_SYNC_LIBRARY_REMOTE", "").strip() or None)
 
-    def _rsync(self, *args: str) -> str:
+    def _rsync(self, *args: str, ok: Sequence[int] = (0, 24)) -> str:
         command = [self.rsync, "-a", "--delay-updates", "--timeout=60"]
         if self.ssh:
             command += ["-e", f"ssh {self.ssh}"]
@@ -60,7 +79,7 @@ class Sync:
             result = subprocess.run(command + list(args), capture_output=True, text=True, timeout=self.timeout)
         except (OSError, subprocess.TimeoutExpired) as exc:
             raise SyncError(f"rsync: {exc}") from exc
-        if result.returncode not in (0, 24):  # 24: files vanished mid-run, harmless here
+        if result.returncode not in ok:  # 24: files vanished mid-run, harmless here
             raise SyncError(f"rsync exited {result.returncode}: {result.stderr.strip()[-300:]}")
         return result.stdout
 
@@ -71,6 +90,23 @@ class Sync:
     def push(self) -> None:
         self.local.mkdir(parents=True, exist_ok=True)
         self._rsync("--exclude=/plans/", "--exclude=.*", "--exclude=*.partial*", f"{self.local}/", f"{self.remote}/")
+
+    def pull_media(self, rel_paths: Sequence[str], library: Path) -> list[str]:
+        """Copy these library-relative recordings from the server's library into `library`."""
+        wanted = sorted({p for p in rel_paths if p and not p.startswith("/") and ".." not in Path(p).parts})
+        if not wanted:
+            return []
+        if not self.library_remote:
+            raise SyncError("no library remote: set WRIT_SYNC_LIBRARY_REMOTE")
+        library.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as listing:
+            listing.write("".join(f"{p}\n" for p in wanted))
+        try:
+            # 23: some files weren't there; the producer reports what's still missing
+            self._rsync(f"--files-from={listing.name}", f"{self.library_remote}/", f"{library}/", ok=(0, 23, 24))
+        finally:
+            os.unlink(listing.name)
+        return wanted
 
 
 def prune(buffer: Path, days: float, now: datetime | None = None) -> list[Path]:

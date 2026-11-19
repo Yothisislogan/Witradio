@@ -116,6 +116,15 @@ class Producer:
     def produce(self, airing: Airing) -> Result:  # pragma: no cover - each producer implements it
         raise NotImplementedError
 
+    def make_music(self, caption: str, out: Path, seconds: float) -> bool:
+        """A track or bed from the local music engine (music-gen.server running ACE-Step)."""
+        engine: Callable[..., bool] | None = self.ctx.services.get("music")
+        if engine is None:
+            from music_gen_client import generate_music
+
+            return generate_music(caption, out, duration=seconds, audio_format="flac")
+        return engine(caption, out, seconds)
+
     def root_for(self, cleared: bool) -> Path:
         if os.environ.get("WRIT_REHEARSE") == "1" or (self.fail_closed and not cleared):
             return self.ctx.rehearsal_dir
@@ -160,6 +169,7 @@ class Context:
     feeds_config: dict = field(default_factory=dict)
     log: Callable[[str], None] = print
     services: dict = field(default_factory=dict)  # injectable clients (feeds, music) for tests
+    library_dir: Path | None = None  # the Halo's copy of the recordings the plans use
 
     @classmethod
     def for_station(cls, station, **overrides: Any) -> "Context":
@@ -174,7 +184,7 @@ class Context:
                    renderer=renderer, writer=ScriptWriter.for_renderer(llm, renderer),
                    buffer_dir=station.output_dir / "buffer", rehearsal_dir=runtime / "rehearsal",
                    work_dir=runtime / "producers" / "work", state_dir=runtime / "producers",
-                   feeds_config=load_feeds_config(), **overrides)
+                   feeds_config=load_feeds_config(), library_dir=station.library_dir, **overrides)
 
 
 def words(text: str) -> int:

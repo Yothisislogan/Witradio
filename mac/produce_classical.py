@@ -79,6 +79,7 @@ def work_facts(entry: dict[str, Any]) -> str:
 
 class ClassicalLinks(Producer):
     program = "classical"
+    plan_program = "classical"  # which plans in buffer/plans this producer takes
     lead_hours = 36.0
 
     def facts_dir(self) -> Path:
@@ -103,6 +104,8 @@ class ClassicalLinks(Producer):
                 starts = datetime.fromisoformat(plan["starts_at"])
                 ends = datetime.fromisoformat(plan["ends_at"])
             except (ValueError, KeyError, json.JSONDecodeError):
+                continue
+            if plan.get("program", "classical") != self.plan_program:
                 continue
             if ends > now and starts <= now + timedelta(hours=self.lead_hours):
                 due.append(plan)

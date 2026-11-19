@@ -54,6 +54,7 @@ from schedule import ProgramBlock, StationSchedule, load_schedule, slot_key  # n
 AUDIO_EXTENSIONS = {".flac", ".wav", ".mp3", ".ogg", ".opus", ".m4a", ".aif", ".aiff"}
 LATE_WINDOW = timedelta(minutes=10)  # joining a block this late still starts at its top
 POST_SLACK = 60.0  # a work may overrun the next post by at most this many seconds
+PLANNED_PROGRAMS = ("classical", "stacks")  # shows the server plans from the catalog
 SAFE_REPEAT_HOURS = 6.0
 SERVED_KEEP = 40
 
@@ -95,6 +96,7 @@ class Item:
     plan_id: str = ""
     role: str = ""
     starts_at: str = ""  # when the director expects it to start
+    catalog_path: str = ""  # a borrowed recording inside a produced segment (a Stacks remix)
 
     def annotate(self) -> str:
         """Liquidsoap's annotate: URI, carrying gain and display metadata."""
@@ -194,15 +196,17 @@ class Director:
         block = self.schedule.program_block_at(cursor)
         show = self.schedule.shows[block.show_id]
         context = {"show_id": block.show_id, "show_title": block.title, "host": show.host}
-        if show.program == "classical":
-            fallback = self._classical_unlocked(show)
+        if show.program in PLANNED_PROGRAMS:
+            fallback = self._unlocked_fallback(show)
             if fallback is None:
                 item = self._from_plan(block, cursor, state, context)
                 if item is not None:
                     return item
-                return self._filler(block, cursor, state, context)
-            context = {"show_id": fallback, "show_title": self.schedule.shows[fallback].name,
-                       "host": self.schedule.shows[fallback].host}
+                if show.program == "classical":
+                    return self._filler(block, cursor, state, context)
+            else:
+                context = {"show_id": fallback, "show_title": self.schedule.shows[fallback].name,
+                           "host": self.schedule.shows[fallback].host}
         return (
             self._from_buffer(block, cursor, state, context)
             or self._from_safe(block, cursor, state, context)
@@ -212,6 +216,25 @@ class Director:
 
     def _seconds_to(self, block: ProgramBlock, cursor: datetime) -> float:
         return (self.schedule.localize(block.end) - cursor).total_seconds()
+
+    def _unlocked_fallback(self, show) -> str | None:
+        """None if a planned show (classical, The Stacks) may run; else the show that runs instead."""
+        if show.program == "stacks":
+            return self._stacks_unlocked(show)
+        return self._classical_unlocked(show)
+
+    def _stacks_unlocked(self, show) -> str | None:
+        """The Stacks runs once enough records are through the content screen (unlock_records,
+        default 15). WRIT_FORCE_STACKS=1 runs it anyway, for staging on /next."""
+        from stacks_planner import airable_records
+
+        catalog = self.catalog()
+        need = int(show.params.get("unlock_records", 15) or 0)
+        if os.environ.get("WRIT_FORCE_STACKS") == "1":
+            need = 1
+        if catalog is not None and airable_records(catalog) >= need:
+            return None
+        return show.params.get("fallback_show", "monster_mix")
 
     def _classical_unlocked(self, show) -> str | None:
         """None if the block may run; otherwise the show that runs instead.
@@ -231,7 +254,10 @@ class Director:
     # ── classical plans ──
 
     def plan_for(self, block: ProgramBlock) -> dict | None:
-        from classical_planner import Plan, commit_plan, plan_for_block
+        if self.schedule.shows[block.show_id].program == "stacks":
+            import stacks_planner as planner
+        else:
+            import classical_planner as planner
 
         start = self.schedule.localize(block.start)
         plan_id = f"{block.show_id}@{start.astimezone(timezone.utc):%Y-%m-%dT%H%MZ}"
@@ -244,10 +270,13 @@ class Director:
         catalog = self.catalog()
         if catalog is None:
             return None
-        plan: Plan = plan_for_block(self.schedule, block, catalog)
+        if planner.__name__ == "stacks_planner":
+            plan = planner.plan_for_block(self.schedule, block, catalog, library=self.library)
+        else:
+            plan = planner.plan_for_block(self.schedule, block, catalog)
         if not plan.ok or not plan.entries:
             return None
-        commit_plan(catalog, plan)
+        planner.commit_plan(catalog, plan)
         data = plan.to_json()
         self.plans_dir.mkdir(parents=True, exist_ok=True)
         tmp = path.with_suffix(".tmp")
@@ -265,9 +294,9 @@ class Director:
         # Start a day back: program_blocks clips at the window, and a block on air must keep its real start.
         for block in self.schedule.program_blocks(wall - timedelta(days=1), wall + timedelta(hours=hours)):
             show = self.schedule.shows[block.show_id]
-            if show.program != "classical" or block.end <= wall:
+            if show.program not in PLANNED_PROGRAMS or block.end <= wall:
                 continue
-            unlocked = self._classical_unlocked(show) is None
+            unlocked = self._unlocked_fallback(show) is None
             status["unlocked"][block.show_id] = unlocked
             if unlocked:
                 plan = self.plan_for(block)
@@ -346,12 +375,24 @@ class Director:
                 path = self._talk_file(plan_id, index - 1)
                 if path is not None:
                     state["index"] = index
+                    meta = self._talk_meta(path)
                     return Item(kind="talk", path=str(path), seconds=self._duration(str(path)),
-                                title=entry["role"].replace("_", " ").title(), entry_id=f"{plan_id}#{index - 1}",
-                                plan_id=plan_id, role=entry["role"], **context)
+                                title=meta.get("title") or entry["role"].replace("_", " ").title(),
+                                artist=meta.get("artist", ""), credit=meta.get("credit", ""),
+                                license=meta.get("license", ""), catalog_path=meta.get("catalog_path", ""),
+                                entry_id=f"{plan_id}#{index - 1}", plan_id=plan_id, role=entry["role"], **context)
                 continue  # the producers haven't rendered this link yet
         state["index"] = index
         return None  # plan finished early: the filler covers the rest
+
+    @staticmethod
+    def _talk_meta(path: Path) -> dict:
+        """What a produced talk segment says about itself: title, credit, and any borrowed recording."""
+        try:
+            data = json.loads(path.with_name(f"{path.stem}.meta.json").read_text())
+        except (OSError, json.JSONDecodeError):
+            return {}
+        return data if isinstance(data, dict) else {}
 
     def _talk_file(self, plan_id: str, index: int) -> Path | None:
         folder = self.talk_dir / plan_id
@@ -559,6 +600,10 @@ class Director:
             if item.kind != "buffer" or item.license not in ("", "generated"):
                 catalog.record_airplay(path, aired_at=now, station_id=self.station.id,
                                        show_id=item.show_id or None, role=item.role or item.kind)
+        if catalog is not None and item.kind == "talk" and item.catalog_path:
+            # A remix or speech sample carries a borrowed recording: log that recording.
+            catalog.record_airplay(item.catalog_path, aired_at=now, station_id=self.station.id,
+                                   show_id=item.show_id or None, role=item.role)
         return now_playing
 
 

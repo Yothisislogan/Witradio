@@ -234,6 +234,7 @@ master feeds two outputs, encoded in parallel: `/lossless` (Ogg FLAC) and
 | Music pull from the bible's cleared sources | `tools/pull_music.py`, `config/music_sources.yaml` | `python3 tools/pull_music.py sources` |
 | Library of Congress intake for The Stacks, with the content screen | `tools/pull_loc.py`, `config/loc_sources.yaml` | `python3 tools/pull_loc.py sources` |
 | Classical fill planner and rotation rules | `mac/classical_planner.py` | `python3 mac/classical_planner.py --at "2026-11-18 23:00"` |
+| The Stacks planner: hour clock, theme carts, rotation | `mac/stacks_planner.py` | `python3 mac/stacks_planner.py --at "2026-11-19 13:00"` |
 | Playout master: outputs, gain, fallbacks, silence detection | `liquidsoap/wit_next.liq` | `./writ --station wit-next start playout` |
 | Director: what plays next, now-playing, airplay log | `mac/playout_director.py` | `python3 mac/playout_director.py status` |
 | Alerts by email (text messages optional) | `mac/alerts.py` | `python3 mac/alerts.py test` |
@@ -243,7 +244,8 @@ master feeds two outputs, encoded in parallel: `/lossless` (Ogg FLAC) and
 The catalog for `wit-next` lives at `~/.writ/stations/wit-next/catalog.db`.
 Classical blocks stay locked until it holds 100 h of cleared lossless
 classical (Nocturne, Evening Concert), then 200 h (Day Shift) and 300 h
-(Matinee, Concert Hall). Until then their slots run Monster Mix.
+(Matinee, Concert Hall). Until then their slots run Monster Mix. The Stacks
+unlocks at 15 approved records (section 7.6).
 
 ### 6.1 Install and start
 
@@ -539,8 +541,7 @@ since 2024-2026. loc.gov offers 1926 records for download too, so its
 download flags don't track copyright: the script's year check does.
 `loc-jukebox` stays opt-in until you decide.
 
-Approved items wait in the catalog. The Stacks producer (development plan
-Phase 4) will schedule them.
+Approved items go on air through The Stacks (section 7.6).
 
 ## 7. The Halo: writing and voicing the shows
 
@@ -581,7 +582,8 @@ due, and pushes the audio:
 | The Market | 2 h ahead; The Tape and this morning's releases 20 min ahead | Fails closed; every episode ends with the disclaimer |
 | Ying & Yang | 2 h ahead | Fails closed; logs a prediction, grades it from the scores, reads the Receipts |
 | Monster Mix | 12 h ahead | The Drift plus Wit's breaks; also fills classical slots that haven't unlocked; at most `WRIT_MONSTER_MIX_TRACKS_PER_HOUR` new tracks (default 8) |
-| The Stacks, Miles, Office Hours, Bedtime Stories | Not built yet | Their slots play the safe library |
+| The Stacks | 36 h ahead, from the server's plans | Steve's talk, the remixes, speech samples and Then & Now (section 7.6) |
+| Miles, Office Hours, Bedtime Stories | Not built yet | Their slots play the safe library |
 
 To hear a show without touching the buffer, rehearse one airing. It lands
 in `runtime/rehearsal/`:
@@ -644,8 +646,8 @@ The Halo needs to reach `site.api.espn.com`, `api.stlouisfed.org`,
    export WRIT_SYNC_REMOTE=witfm@<hetzner-tailscale-name>:/home/witfm/Witradio/output/stations/wit-next/buffer
    ```
 
-3. The server plans the classical blocks 36 hours ahead on its own (the
-   playout runs a planner every 15 minutes) and writes
+3. The server plans the classical and Stacks blocks 36 hours ahead on its
+   own (the playout runs a planner every 15 minutes) and writes
    `buffer/plans/_status.json`, saying which blocks have unlocked. The Halo
    pulls those and pushes finished audio; files land whole, so the playout
    never sees half a segment.
@@ -658,6 +660,43 @@ The Halo needs to reach `site.api.espn.com`, `api.stlouisfed.org`,
 If the Halo goes dark, the server plays what's already in its buffer, then
 the safe library. That is the Phase 1 gate's "4 hours with the Halo switched
 off".
+
+### 7.6 The Stacks
+
+The playout server plans each Stacks block from the approved Library of
+Congress records, on the bible's clock: Pull One, two records with an intro
+each, a remix, Call Number, more records and remixes, the Speech Sample near
+:40, Then & Now near :45, and Back to the Stacks before the hour. Each hour
+takes one theme cart; Saturday's Crate Dig keeps one cart for both hours and
+remixes every pair. No record repeats within 14 days, counting what's
+already planned. Preview a block:
+
+```bash
+python3 mac/stacks_planner.py --at "2026-11-19 13:00"
+```
+
+The records play straight from the server's library. The Halo renders the
+rest into `buffer/talk/<plan>/`:
+
+| Segment | How it's made |
+|---|---|
+| Steve's talk | Written from the plan's record facts (year, performer, label, the Library's notes). A script that fails the fact check becomes a plain announcement from those facts |
+| The Remix | A phrase from the record, or from its Citizen DJ clip; its tempo and key (librosa); a new instrumental bed from ACE-Step at that tempo and key; the phrase stretched onto the bar lines with the bed ducked under it (`mac/remix.py`). Bed styles rotate through boom-bap, lo-fi, house, electro-swing and trip-hop |
+| Speech Sample | The recording over an ambient bed, faded out at 4 minutes |
+| Then & Now | A new ACE-Step track in the original's feel, right after it |
+
+A remix or speech sample carries the recording's credit in now-playing, and
+the director logs the recording's airplay. Before rendering, the Halo copies
+the recordings it re-cuts from the server's library into its own
+(`WRIT_LIBRARY_DIR`). By default it looks for the server's library next to
+the buffer in `WRIT_SYNC_REMOTE`; set `WRIT_SYNC_LIBRARY_REMOTE` if the
+library lives elsewhere. librosa is a project dependency; without it, beds
+use their style's own tempo and phrases aren't stretched.
+
+The Stacks unlocks once the catalog holds 15 approved records
+(`unlock_records` in `config/wit_next_schedule.yaml`). Until then its slots
+run Monster Mix. To stage it on `/next` sooner, start the playout with
+`WRIT_FORCE_STACKS=1`.
 
 ## 8. Decisions due by the end of Phase 0
 

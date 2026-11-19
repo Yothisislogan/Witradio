@@ -283,6 +283,7 @@ The listener daemon polls for new messages every 30 seconds and generates spoken
 │   ├── alerts.py               # Alerts by email (text messages optional)
 │   ├── catalog.py              # Music catalog: licenses, gain, airplay audit
 │   ├── classical_planner.py    # Classical block planner and rotation rules
+│   ├── stacks_planner.py       # The Stacks: hour clock, theme carts, rotation
 │   ├── music_library.py        # Download, check and catalogue music sources
 │   ├── loc_library.py          # loc.gov and Citizen DJ intake (paced, screened)
 │   ├── llm_client.py           # OpenAI-compatible LLM client (the Halo)
@@ -292,6 +293,8 @@ The listener daemon polls for new messages every 30 seconds and generates spoken
 │   ├── produce_market.py       # The Market (Opening Bell, Closing Tape, Week Ahead)
 │   ├── produce_ying_yang.py    # Ying & Yang, with the Receipts predictions table
 │   ├── produce_monster_mix.py  # Monster Mix: drifting music and Wit's breaks
+│   ├── produce_stacks.py       # The Stacks: Steve, remixes, speech samples, Then & Now
+│   ├── remix.py                # Tempo and key, beds, stretch, layer and duck
 │   ├── drift.py                # The Drift: one change per track
 │   ├── script_writer.py        # Host brief + facts -> JSON voice script
 │   ├── fact_check.py           # Every number and name must be in the facts
