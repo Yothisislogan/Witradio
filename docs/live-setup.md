@@ -584,7 +584,8 @@ due, and pushes the audio:
 | Monster Mix | 12 h ahead | The Drift plus Wit's breaks; also fills classical slots that haven't unlocked; at most `WRIT_MONSTER_MIX_TRACKS_PER_HOUR` new tracks (default 8) |
 | The Stacks | 36 h ahead, from the server's plans | Steve's talk, the remixes, speech samples and Then & Now (section 7.6) |
 | Miles with Logan | 20 h ahead, one session per cycle | Tempo-locked sessions with Logan's cues (section 7.7) |
-| Office Hours, Bedtime Stories | Not built yet | Their slots play the safe library |
+| Office Hours | Drafted 30 h ahead; voiced once approved | Signed class material, a review queue, encores (section 7.8) |
+| Bedtime Stories | Not built yet | Its slots play the safe library |
 
 Shows made close to air (The Market, Ying & Yang) run first in every
 cycle, so a long Miles or Stacks render never holds up The Tape. The Stacks
@@ -777,6 +778,87 @@ publish a privacy policy at the link the form shows (`/privacy`), and set
 `MILES_CLUB_URL` in the form to the station API's address. The form asks
 every listener to confirm they're 13 or older, and Bedtime Stories never
 invites entries.
+
+### 7.8 Office Hours with Professor Ex
+
+Office Hours follows the bible's hour clock: Roll Call, a 15-minute lecture,
+Define That, the Licensing Lab (five practice questions, a pause for the
+answer, then the walkthrough), the recruiting line, War Stories, Ask the
+Professor, and Homework. Saturday's Exam Cram runs 25 practice questions
+back to back. Lectures follow the semesters in `config/office_hours.yaml`,
+one topic a weeknight from `start_date` (a Monday).
+
+**Nothing airs unsigned.** Every piece of class material needs a licensed
+person's signature first: lecture notes, terms, practice questions, FAQ
+answers, war stories and the recruiting line. A signature is bound to the
+text, so editing an item means signing it again. Starter material for
+Insurance 101 ships in `config/office_hours/`, drafted for a reviewer and
+unsigned. See what's waiting, then sign what's been checked:
+
+```bash
+python3 mac/office_hours.py content
+```
+
+```bash
+python3 mac/office_hours.py sign deductibles q-basics-001 --reviewer "Jane Doe, VA P&C license"
+```
+
+Signatures go to `WRIT_OFFICE_HOURS_DIR/signatures.yaml` (default
+`~/.writ/office_hours/`). That folder also takes private material, which
+overrides the public copy: anything from WIT's own claims belongs there, not
+in this public repository. Lectures for the other semesters need notes in
+`lectures/<semester>/<topic>.md`, in the same form as the Insurance 101 ones.
+A state rule goes in as `VA (checked 2026-11-02): ...`, so the date is
+always on air. War Stories have to be real: see
+`config/office_hours/war_stories/README.md`. Any story whose notes look like
+they hold an email address, phone number, street address or policy number
+is skipped.
+
+**Episodes wait for a reviewer.** Each episode is drafted about 30 hours
+ahead, from signed material only, and goes to the review queue. The first
+10 approvals are the Phase 5 gate. After that, only flagged episodes wait:
+those naming WIT outside the recruiting line, with state rules, with
+listener questions, or with a story from WIT's claims (`review` in
+`config/office_hours.yaml`). Read the episode as text, then decide:
+
+```bash
+python3 mac/office_hours.py review
+```
+
+```bash
+python3 mac/office_hours.py approve office_hours_2026-12-07_1800 --reviewer "Jane Doe"
+```
+
+```bash
+python3 mac/office_hours.py reject office_hours_2026-12-07_1800 --reviewer "Jane Doe" --note "Explain adverse selection more slowly."
+```
+
+A rejected episode is rewritten with the note and comes back for review. A
+reviewer can also edit the script text in the episode's JSON before
+approving. If an episode is still waiting 90 minutes before air, the last
+approved episode airs instead, as an encore. Every coverage point ends with
+"Your coverage depends on your policy language and your state.", and every
+answer to a listener adds "For your own claim, call your agent or carrier."
+
+**Ask the Professor.** Listeners send questions from
+`web/ask-the-professor.html`, which posts to the station API
+(`POST /ask-the-professor`). It keeps the question and an optional first
+name and city, and turns away anything holding contact details or a policy
+number. On the playout server, a reviewer answers the questions worth airing
+with short notes, one fact per `--note`. The Professor answers only from
+those notes:
+
+```bash
+python3 mac/ask_professor.py pending
+```
+
+```bash
+python3 mac/ask_professor.py answer 7 --reviewer "Jane Doe" --note "Sewer backup is commonly excluded unless added by endorsement."
+```
+
+When no listener question is waiting, the segment answers a signed FAQ
+entry. As with the Miles Club, publish the privacy policy and set `ASK_URL`
+in the form before it goes live.
 
 ## 8. Decisions due by the end of Phase 0
 

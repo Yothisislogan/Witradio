@@ -74,9 +74,11 @@ STATION_PROXY_ENDPOINTS = {
     "discogs",
     "qr",
     "miles-club",
+    "ask-the-professor",
 }
-MILES_CLUB_PER_DAY = 5  # entries per IP address per day (the address itself is never stored)
-miles_club_times: dict[str, list[float]] = {}
+LISTENER_FORMS = ("/miles-club", "/ask-the-professor")
+FORM_PER_DAY = 5  # listener form entries per IP address per day (the address itself is never stored)
+form_times: dict[str, dict[str, list[float]]] = {}
 
 # Shared state — set by start_api_thread()
 _track_info: dict = {}
@@ -197,8 +199,8 @@ class NowPlayingHandler(http.server.BaseHTTPRequestHandler):
                 return
             if method == "POST" and path == "/message":
                 return self._handle_message_body(body or b"")
-            if method == "POST" and path == "/miles-club":
-                return self._handle_miles_club_body(body or b"")
+            if method == "POST" and path in LISTENER_FORMS:
+                return self._handle_form_body(path, body or b"")
             return self._send_error(404, "Unknown endpoint")
 
         target = f"http://127.0.0.1:{station.stream.api_port}{path}"
@@ -258,7 +260,7 @@ class NowPlayingHandler(http.server.BaseHTTPRequestHandler):
         station_route = parse_station_route(path)
         if station_route:
             station_id, station_path = station_route
-            if station_path not in ("/message", "/miles-club"):
+            if station_path not in ("/message",) + LISTENER_FORMS:
                 self.send_response(404)
                 self.end_headers()
                 return
@@ -273,26 +275,29 @@ class NowPlayingHandler(http.server.BaseHTTPRequestHandler):
                 content_type=self.headers.get("Content-Type"),
             )
 
-        if path not in ("/message", "/miles-club"):
+        if path not in ("/message",) + LISTENER_FORMS:
             self.send_response(404)
             self.end_headers()
             return
 
         content_length = int(self.headers.get('Content-Length', 0))
         body = self.rfile.read(min(content_length, 4096))
-        if path == "/miles-club":
-            return self._handle_miles_club_body(body)
+        if path in LISTENER_FORMS:
+            return self._handle_form_body(path, body)
         self._handle_message_body(body)
 
-    def _handle_miles_club_body(self, body: bytes):
-        """A Miles Club entry from web/miles-club.html. It waits for review before air."""
+    def _handle_form_body(self, path: str, body: bytes):
+        """A listener form: a Miles Club entry or a question for Ask the Professor. Both wait for a
+        person's review before anything reaches air."""
+        from ask_professor import Mailbag, mailbag_path
         from miles_club import ClubError, MilesClub, club_path
 
         client_ip = self.client_address[0]
         now = time.time()
-        recent = [t for t in miles_club_times.get(client_ip, []) if now - t < 86400]
-        if len(recent) >= MILES_CLUB_PER_DAY:
-            return self._send_error(429, "That's plenty of miles for one day. Try again tomorrow.")
+        times = form_times.setdefault(path, {})
+        recent = [t for t in times.get(client_ip, []) if now - t < 86400]
+        if len(recent) >= FORM_PER_DAY:
+            return self._send_error(429, "That's plenty for one day. Try again tomorrow.")
         try:
             data = json.loads(body.decode("utf-8"))
             if not isinstance(data, dict):
@@ -300,15 +305,20 @@ class NowPlayingHandler(http.server.BaseHTTPRequestHandler):
         except (UnicodeDecodeError, ValueError):
             return self._send_error(400, "Invalid entry")
         try:
-            with MilesClub(club_path(STATION)) as club:
-                club.submit(data)
+            if path == "/miles-club":
+                with MilesClub(club_path(STATION)) as club:
+                    club.submit(data)
+                note = "Thanks! Logan reads approved names on Miles with Logan."
+            else:
+                with Mailbag(mailbag_path(STATION)) as mailbag:
+                    mailbag.submit(data)
+                note = "Thanks! The Professor answers the questions a reviewer picks, on Office Hours."
         except ClubError as exc:
             return self._send_error(400, str(exc))
         except Exception:
             return self._send_error(500, "Internal server error")
-        miles_club_times[client_ip] = recent + [now]
-        self._send_json({"status": "received",
-                         "note": "Thanks! Logan reads approved names on Miles with Logan."})
+        times[client_ip] = recent + [now]
+        self._send_json({"status": "received", "note": note})
 
     def _handle_message_body(self, body: bytes):
         client_ip = self.client_address[0]

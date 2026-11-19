@@ -494,7 +494,7 @@ class MilesClubTests(unittest.TestCase):
                 return exc.code, json.loads(exc.read())
 
         with patch.dict(os.environ, {"WRIT_MILES_CLUB_DB": str(self.root / "api.db")}), \
-                patch.dict(api_server.miles_club_times, clear=True):
+                patch.dict(api_server.form_times, clear=True):
             self.assertEqual(post({"name": "Dana", "city": "Norfolk", "miles": 3, "age_13_plus": True})[0], 200)
             status, body = post({"name": "Dana", "miles": 3, "age_13_plus": False})
             self.assertEqual((status, body["error"]), (400, "The Miles Club is for listeners 13 and older."))

@@ -1,0 +1,153 @@
+# Licensing Lab question bank (show bible: "Questions are written from each
+# state's published exam content outline, reviewed by a licensed person, and
+# kept in a question bank. They're never presented as official exam
+# questions.")
+#
+# A question airs only once reviewed_by and reviewed_on are filled in:
+#   python3 mac/office_hours.py sign q-basics-001 --reviewer "Name"
+# state: general, or VA, NC, GA, NV, AZ. line: P&C, L&H or both. outline: the
+# section of the state's published exam content outline it's written from.
+# why_not explains the wrong choices (optional; Exam Cram reads it).
+questions:
+  - id: q-basics-001
+    state: general
+    line: both
+    outline: "Insurance basics: risk and insurance"
+    question: "The law of large numbers lets an insurer do which of the following?"
+    choices:
+      A: "Avoid paying small claims"
+      B: "Predict losses more accurately as the number of similar exposures grows"
+      C: "Charge every policyholder the same premium"
+      D: "Eliminate the chance of a loss"
+    answer: B
+    explanation: "With many similar, independent exposures, actual losses come close to expected losses. That predictability is what lets an insurer set a price ahead of time."
+    why_not: "Insurance doesn't eliminate losses or require identical premiums, and paying small claims is a deductible question, not a law of large numbers question."
+    reviewed_by: null
+    reviewed_on: null
+  - id: q-basics-002
+    state: general
+    line: both
+    outline: "Insurance basics: risk and insurance"
+    question: "Which of these is a pure risk, the kind insurance is built for?"
+    choices:
+      A: "Buying a lottery ticket"
+      B: "Investing in the stock market"
+      C: "The chance your house catches fire"
+      D: "Starting a business"
+    answer: C
+    explanation: "A pure risk offers only a chance of loss or no loss. A house fire is pure risk. The others are speculative risks, which can also bring a gain, and they aren't insurable."
+    why_not: "Lotteries, investing and starting a business can all produce a gain, which makes them speculative."
+    reviewed_by: null
+    reviewed_on: null
+  - id: q-basics-003
+    state: general
+    line: P&C
+    outline: "Insurance basics: policy provisions"
+    question: "Which part of a policy shows the named insured, the policy period, the limits and the premium?"
+    choices:
+      A: "The declarations"
+      B: "The insuring agreement"
+      C: "The conditions"
+      D: "The exclusions"
+    answer: A
+    explanation: "The declarations page summarizes who, what, where, when and how much. The insuring agreement is the promise, the conditions are the rules, and the exclusions take things out of coverage."
+    reviewed_by: null
+    reviewed_on: null
+  - id: q-basics-004
+    state: general
+    line: P&C
+    outline: "Insurance basics: policy provisions"
+    question: "A deductible is best described as which of the following?"
+    choices:
+      A: "The most the insurer will pay for a loss"
+      B: "The part of a covered loss the insured pays before the insurer pays"
+      C: "A fee for paying the premium in installments"
+      D: "The insurer's right to recover from a responsible third party"
+    answer: B
+    explanation: "The deductible is the insured's share of a covered loss. The most the insurer pays is the limit, and recovering from a responsible party is subrogation."
+    reviewed_by: null
+    reviewed_on: null
+  - id: q-basics-005
+    state: general
+    line: P&C
+    outline: "Insurance basics: property valuation"
+    question: "Actual cash value is most commonly figured as which of the following?"
+    choices:
+      A: "Market value plus sales tax"
+      B: "The original purchase price"
+      C: "Replacement cost minus depreciation"
+      D: "Replacement cost plus depreciation"
+    answer: C
+    explanation: "Actual cash value is commonly replacement cost minus depreciation, though the policy's own definition controls and some states define it by rule."
+    reviewed_by: null
+    reviewed_on: null
+  - id: q-basics-006
+    state: general
+    line: both
+    outline: "Insurance basics: legal concepts"
+    question: "The principle of indemnity means a claim payment should do what?"
+    choices:
+      A: "Restore the insured to the financial position they were in before the loss"
+      B: "Leave the insured better off than before"
+      C: "Pay the policy limit on every claim"
+      D: "Return all premiums paid"
+    answer: A
+    explanation: "Indemnity means making the insured whole: no better and no worse off than before the loss."
+    reviewed_by: null
+    reviewed_on: null
+  - id: q-basics-007
+    state: general
+    line: both
+    outline: "Insurance basics: risk and insurance"
+    question: "Which of the following is a peril?"
+    choices:
+      A: "Oily rags stored in a garage"
+      B: "Lightning"
+      C: "A careless attitude toward locking doors"
+      D: "A worn electrical cord"
+    answer: B
+    explanation: "A peril is a cause of loss, like lightning. The others are hazards: conditions or attitudes that make a loss more likely."
+    reviewed_by: null
+    reviewed_on: null
+  - id: q-basics-008
+    state: general
+    line: both
+    outline: "Insurance basics: legal concepts"
+    question: "After paying a claim, an insurer recovers its payment from the driver who caused the accident. This is called what?"
+    choices:
+      A: "Coinsurance"
+      B: "Indemnity"
+      C: "Subrogation"
+      D: "Reinsurance"
+    answer: C
+    explanation: "Subrogation is the insurer's right to step into the insured's shoes and recover from the party responsible for the loss."
+    reviewed_by: null
+    reviewed_on: null
+  - id: q-basics-009
+    state: general
+    line: both
+    outline: "Insurance basics: legal concepts"
+    question: "For property insurance, when must an insurable interest exist?"
+    choices:
+      A: "Only when the policy is bought"
+      B: "At the time of the loss"
+      C: "Only when the premium is paid"
+      D: "It isn't required for property insurance"
+    answer: B
+    explanation: "For property insurance, the insured needs a financial stake in the property when the loss happens. For life insurance, the interest has to exist when the policy is bought."
+    reviewed_by: null
+    reviewed_on: null
+  - id: q-basics-010
+    state: general
+    line: both
+    outline: "Insurance basics: risk and insurance"
+    question: "An insurer buys coverage from another insurer to spread its own catastrophe risk. This is called what?"
+    choices:
+      A: "Reinsurance"
+      B: "Coinsurance"
+      C: "Self-insurance"
+      D: "Subrogation"
+    answer: A
+    explanation: "Reinsurance is insurance for insurance companies. It lets an insurer take on more risk than it could carry alone."
+    reviewed_by: null
+    reviewed_on: null

@@ -1,0 +1,57 @@
+# Office Hours with Professor Ex (show bible: "Office Hours with Professor Ex").
+#
+# Class material lives in config/office_hours/ (general education, fine in a
+# public repository) and in WRIT_OFFICE_HOURS_DIR (default
+# ~/.writ/office_hours/) for anything that must stay private, like stories
+# from WIT's own claims. An item airs only once a licensed person has signed
+# it (reviewed_by), and episode scripts go through the review queue:
+#
+#   python3 mac/office_hours.py content      # class material waiting for a signature
+#   python3 mac/office_hours.py review       # episodes waiting for sign-off
+
+# Lectures run in semester order, one topic a weeknight, from this date.
+start_date: "2026-12-07"
+semesters:
+  - {id: insurance-101, title: "Insurance 101",
+     topics: [risk-pooling, premiums, deductibles, declarations, exclusions]}
+  - {id: auto, title: "Auto",
+     topics: [liability-limits, uninsured-motorist, why-rates-rose]}
+  - {id: home, title: "Home",
+     topics: [dwelling-vs-contents, replacement-cost-vs-acv, water-damage, wind-and-hail-deductibles]}
+  - {id: commercial, title: "Commercial",
+     topics: [general-liability, business-owners-policy, workers-comp, commercial-auto]}
+  - {id: life-health, title: "Life and Health Basics",
+     topics: [term-vs-whole-life, beneficiaries]}
+  - {id: agency-life, title: "Agency Life",
+     topics: [how-agents-get-paid, carriers-vs-brokers, independent-agency-model]}
+  - {id: licensing, title: "Licensing Track",
+     topics: [pc-exam-prep, lh-exam-prep, state-notes]}
+
+# Script review (development plan, Phase 5 gate: "the reviewer signs off on
+# the first 10 Office Hours scripts"). Until gate_episodes are approved, every
+# episode waits for a reviewer. After that, only flagged ones do: anything
+# naming WIT or its products outside the fixed recruiting line, any state
+# rule, any listener question, and any story from WIT's own claims.
+review:
+  gate_episodes: 10
+  after_gate: flagged  # or "always"
+  encore_after: 90  # minutes before air: an episode still waiting is replaced by an encore
+
+# Minutes per segment (the bible's hour clock).
+clock:
+  roll_call: 2
+  lecture: 15
+  define_that: 1
+  licensing_lab: 13
+  war_stories: 13
+  ask_the_professor: 10
+  homework: 3
+lab_questions: 5
+answer_pause: 8  # seconds to answer before the Professor does
+
+lines:
+  disclaimer: "Your coverage depends on your policy language and your state."
+  specific_claims: "For your own claim, call your agent or carrier."
+  practice: "These are practice questions written for this class, not official exam questions."
+  recruiting: "Studying for your license? We Insure Things is hiring, and we help new agents get licensed."
+  dismissal: "Class dismissed. Go read your declarations page."

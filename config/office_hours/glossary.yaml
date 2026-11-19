@@ -1,0 +1,94 @@
+# Define That: one term in 60 seconds. Each term airs once a licensed person
+# has signed it (reviewed_by and reviewed_on): python3 mac/office_hours.py sign <id> --reviewer "Name"
+terms:
+  law-of-large-numbers:
+    term: "Law of large numbers"
+    notes:
+      - "As the number of similar, independent exposures grows, actual losses come closer to expected losses."
+      - "It's why an insurer can price a policy before knowing who will have a claim."
+    reviewed_by: null
+    reviewed_on: null
+  premium:
+    term: "Premium"
+    notes:
+      - "The price of an insurance policy for its policy period."
+      - "It covers expected losses, the insurer's expenses, and a margin."
+    reviewed_by: null
+    reviewed_on: null
+  deductible:
+    term: "Deductible"
+    notes:
+      - "The part of a covered loss the insured pays before the insurer pays."
+      - "A higher deductible generally means a lower premium."
+    reviewed_by: null
+    reviewed_on: null
+  declarations-page:
+    term: "Declarations page"
+    notes:
+      - "The page that summarizes a policy: the named insured, the policy period, what's insured, the coverages, limits, deductibles and premium."
+    reviewed_by: null
+    reviewed_on: null
+  exclusion:
+    term: "Exclusion"
+    notes:
+      - "A part of the policy that takes a cause of loss, kind of property or situation out of coverage."
+    reviewed_by: null
+    reviewed_on: null
+  endorsement:
+    term: "Endorsement"
+    notes:
+      - "A written change to a policy that adds, removes or changes coverage."
+      - "Also called a rider, especially in life and health insurance."
+    reviewed_by: null
+    reviewed_on: null
+  peril:
+    term: "Peril"
+    notes:
+      - "A cause of loss, such as fire, wind or theft."
+    reviewed_by: null
+    reviewed_on: null
+  hazard:
+    term: "Hazard"
+    notes:
+      - "A condition that makes a loss more likely or more severe, such as oily rags in a garage."
+      - "A peril causes the loss; a hazard raises the odds of it."
+    reviewed_by: null
+    reviewed_on: null
+  indemnity:
+    term: "Indemnity"
+    notes:
+      - "Putting the insured back in the financial position they were in before the loss, no better and no worse."
+    reviewed_by: null
+    reviewed_on: null
+  actual-cash-value:
+    term: "Actual cash value"
+    notes:
+      - "Commonly, replacement cost minus depreciation."
+      - "Some policies and states define it differently, so the policy's own definition controls."
+    reviewed_by: null
+    reviewed_on: null
+  replacement-cost:
+    term: "Replacement cost"
+    notes:
+      - "What it costs to replace damaged property with new property of like kind and quality, without a deduction for depreciation."
+    reviewed_by: null
+    reviewed_on: null
+  subrogation:
+    term: "Subrogation"
+    notes:
+      - "After paying a claim, the insurer's right to recover what it paid from the party responsible for the loss."
+    reviewed_by: null
+    reviewed_on: null
+  insurable-interest:
+    term: "Insurable interest"
+    notes:
+      - "A financial stake in the person or property insured: you'd lose money if the loss happened."
+      - "For property it has to exist at the time of the loss; for life insurance, when the policy is bought."
+    reviewed_by: null
+    reviewed_on: null
+  reinsurance:
+    term: "Reinsurance"
+    notes:
+      - "Insurance that insurance companies buy, to spread their own large or catastrophic risks."
+    reviewed_by: null
+    reviewed_on: null

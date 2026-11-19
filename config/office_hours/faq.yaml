@@ -1,0 +1,27 @@
+# Ask the Professor fills from listeners' questions first (approved on the
+# playout server: python3 mac/ask_professor.py). When none are waiting, it
+# answers one of these. Each airs only once a licensed person has signed it.
+questions:
+  - id: faq-raise-deductible
+    question: "Should I raise my deductible to save money?"
+    notes:
+      - "A higher deductible usually lowers the premium because the policyholder keeps the small losses."
+      - "The right deductible is one you could pay tomorrow without trouble."
+      - "Compare the yearly premium savings with how often you'd expect to file a claim."
+    reviewed_by: null
+    reviewed_on: null
+  - id: faq-flood
+    question: "Doesn't my homeowners policy cover flooding?"
+    notes:
+      - "Flood is commonly excluded from homeowners policies."
+      - "Flood coverage is usually bought as a separate flood policy."
+      - "Check the exclusions section of your own policy and ask your agent."
+    reviewed_by: null
+    reviewed_on: null
+  - id: faq-dec-page
+    question: "What should I check first when my renewal arrives?"
+    notes:
+      - "Start with the declarations page: names, addresses, vehicles or property, coverages, limits, deductibles and premium."
+      - "Then look for a notice of changes, which explains any coverage that changed at renewal."
+    reviewed_by: null
+    reviewed_on: null

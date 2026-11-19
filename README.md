@@ -278,6 +278,9 @@ The listener daemon polls for new messages every 30 seconds and generates spoken
 ├── config/miles.yaml           # Miles with Logan: routes, Miles Club milestones, music budget
 ├── config/miles_cues.yaml      # Logan's cue library: the lines to record once
 ├── web/miles-club.html         # The Miles Club form (13+, reviewed before air)
+├── config/office_hours.yaml    # Office Hours: curriculum, review policy, fixed lines
+├── config/office_hours/        # Class material: lecture notes, terms, question bank, FAQ
+├── web/ask-the-professor.html  # Listener questions for Office Hours (13+, reviewed)
 ├── mac/
 │   ├── station_config.py        # Station config resolver and env exporter
 │   ├── playout_director.py     # wit-next: decides each item for Liquidsoap
@@ -302,6 +305,9 @@ The listener daemon polls for new messages every 30 seconds and generates spoken
 │   ├── miles_sessions.py       # The session menu, cue timing and airing fill
 │   ├── tempo_lock.py           # Exact tempo: measure, stretch, check within 2 BPM
 │   ├── miles_club.py           # Miles Club entries, review and the weekly summary
+│   ├── produce_office_hours.py # Office Hours: drafted, reviewed, voiced; encores
+│   ├── office_hours.py         # Class material sign-offs and the episode review queue
+│   ├── ask_professor.py        # Listener questions, answered by a reviewer
 │   ├── drift.py                # The Drift: one change per track
 │   ├── script_writer.py        # Host brief + facts -> JSON voice script
 │   ├── fact_check.py           # Every number and name must be in the facts
