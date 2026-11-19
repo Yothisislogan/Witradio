@@ -1,0 +1,131 @@
+# Logan's cue library for Miles with Logan (show bible: "Record a cue library
+# once (about 150 short clips: counts, interval calls, time checks,
+# encouragement) plus a fresh 2-minute intro each week").
+#
+# Record each line as <id>.wav (or .flac) into WRIT_MILES_CUES, default
+# ~/.writ/voices/logan_cues/. Keep each clip tight: no breath or silence at
+# either end. Any line not recorded yet is spoken in Logan's cloned voice
+# (config/voices.yaml, logan), so the show runs before the recording session.
+# The weekly intro goes in weekly/<year>-W<week>.wav, e.g. weekly/2026-W47.wav.
+#
+#   python3 mac/produce_miles.py cues     # what's recorded, what's still cloned
+#
+# No medical claims anywhere: Logan isn't a fitness pro, which is the point.
+
+cues:
+  # ── Opens and closes ──
+  open_safety: "Headphones low, eyes up, and listen to your body."
+  open_morning: "Morning. Shoes on? Let's go."
+  open_lunch: "Lunch walk. Leave the inbox, bring the feet."
+  open_weekend: "Weekend miles. No meetings, just road."
+  walk_it_out_intro: "Walk It Out. Forty-five minutes, steady, with one push in the middle."
+  intervals_intro: "Intervals. Thirty minutes, seven rounds. Warm-up first."
+  pyramid_intro: "Pyramid. Forty minutes. We climb, we hold, we come back down."
+  route_intro: "Route of the Day. Forty-five minutes, and we're going somewhere."
+  long_slow_intro: "Long Slow Saturday. Ninety minutes, steady. I'll mostly let the music talk."
+  recovery_intro: "Recovery Sunday. Easy walk, then we stretch."
+  easy_miles_intro: "Easy Miles. No plan, just a steady walk. Stay as long as you like."
+  session_done: "That's the session. Walk it down, drink some water."
+  next_session: "Another session starts right now. Stay with me, or head on home."
+  sign_off: "That's the miles for today. See you out there."
+  club_invite: "Log your miles on the WIT-FM website and join the Miles Club. Thirteen and up."
+
+  # ── Blocks and changes ──
+  warmup: "Warm-up. Music's easy. Just let your feet find it."
+  cooldown: "Cool-down. Bring it all the way down."
+  walk_steady: "Steady walk. Find the beat and stay on it."
+  walk_easy: "Easy walk. This is the part where we enjoy it."
+  easy_miles: "Steady walk from here. Nobody's timing you."
+  push_power: "Power walk. Arms moving. Five minutes."
+  push_done: "Push done. Back to steady."
+  jog_go: "Jog. Ride the beat."
+  walk_go: "Walk. Shake out the arms."
+  countdown: "Pick it up in three... two... one."
+  round_1: "Round one of seven."
+  round_2: "Round two."
+  round_3: "Round three."
+  round_4: "Round four. More than halfway through the rounds."
+  round_5: "Round five."
+  round_6: "Round six."
+  last_round: "Last round. Empty the tank, or don't. Nobody's timing you."
+  pyramid_up: "We start at the bottom of the pyramid. The beat steps up every few minutes."
+  step_up: "Step up."
+  pyramid_hold: "Top of the pyramid. Hold it here for five."
+  pyramid_down: "Coming down the other side."
+  step_down: "Step down."
+  long_slow_settle: "Settle in. Long and slow."
+  long_slow_ease: "Last five minutes. Ease it off."
+
+  # ── Strength Minute (a 120 BPM count, one rep every two seconds) ──
+  strength_squats: "Strength minute. Squats. Down and up on my count."
+  strength_lunges: "Strength minute. Lunges. Switch legs on every count."
+  strength_done: "That's the minute. Back to walking."
+  count_1: "One."
+  count_2: "Two."
+  count_3: "Three."
+  count_4: "Four."
+  count_5: "Five."
+  count_6: "Six."
+  count_7: "Seven."
+  count_8: "Eight."
+  count_9: "Nine."
+  count_10: "Ten."
+
+  # ── Time calls ──
+  time_05: "Five minutes in."
+  time_10: "Ten minutes in."
+  time_15: "Fifteen minutes in."
+  time_20: "Twenty minutes in."
+  time_25: "Twenty-five minutes in."
+  time_30: "Thirty minutes in."
+  time_35: "Thirty-five minutes in."
+  time_40: "Forty minutes in."
+  time_45: "Forty-five minutes in."
+  time_50: "Fifty minutes in."
+  time_55: "Fifty-five minutes in."
+  time_60: "An hour in."
+  time_65: "An hour and five."
+  time_70: "An hour and ten."
+  time_75: "An hour and fifteen."
+  time_80: "An hour and twenty."
+  time_85: "An hour and twenty-five."
+  remaining_05: "Five minutes to go."
+  halfway: "Halfway. That's another one in the bank."
+
+  # ── Stretch (Recovery Sunday, over an ambient bed) ──
+  stretch_intro: "Stretch time. Ten minutes, nice and slow. Nothing should hurt."
+  stretch_calf: "Calves. Hands on a wall, one heel back and down. Switch when you're ready."
+  stretch_quad: "Quads. Hold a foot behind you. Something steady to lean on helps."
+  stretch_hamstring: "Hamstrings. Heel out in front, toes up, hinge forward a little."
+  stretch_hip: "Hips. Small step back, tuck the hips under. Easy."
+  stretch_glute: "Ankle over the other knee if you can. Sit back into it."
+  stretch_shoulders: "Shoulders. Arm across the chest, hold, switch."
+  stretch_chest: "Hands behind your back. Open up the chest."
+  stretch_back: "Reach up tall, then fold over slow. Let the arms hang."
+  stretch_neck: "Ear toward the shoulder. Slow. Other side."
+
+  # ── Encouragement ──
+  encourage_01: "Nobody's timing you. Just keep moving."
+  encourage_02: "That's another one in the bank."
+  encourage_03: "Shoulders down. Hands loose."
+  encourage_04: "You showed up. That's the hard part, and it's done."
+  encourage_05: "If I can do this, you can do this. I've seen my pace."
+  encourage_06: "Breathe. In through the nose if you can."
+  encourage_07: "Eyes up. Look at where you're going."
+  encourage_08: "Stay on the beat. Let the music do the work."
+  encourage_09: "Slow is fine. Stopped is fine too. Then we go again."
+  encourage_10: "Every step counts the same. Fast ones, slow ones."
+  encourage_11: "Check in with yourself. Easy enough to talk? Good."
+  encourage_12: "Nice and steady. That's the whole trick."
+  encourage_13: "Somewhere out there, somebody's still asleep. Not you."
+  encourage_14: "Relax the jaw. You'd be surprised."
+  encourage_15: "Little steps, quick feet."
+  encourage_16: "We're not racing anybody. Including yesterday."
+  encourage_17: "Water when you need it."
+  encourage_18: "Keep the arms swinging. They're part of the team."
+  encourage_19: "Find a landmark. Walk to it. Then pick another one."
+  encourage_20: "This beat's doing all the work. We're just along for it."
+  encourage_21: "You're doing better than my first time. Trust me on that."
+  encourage_22: "Tall posture. Like somebody's taking your picture."
+  encourage_23: "Count your breaths for a bit. Four in, four out."
+  encourage_24: "Good. Stay right there."

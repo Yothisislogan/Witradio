@@ -26,6 +26,7 @@ import stacks_planner  # noqa: E402
 from catalog import Catalog  # noqa: E402
 from llm_client import LLMClient  # noqa: E402
 from playout_director import Director  # noqa: E402
+from produce_miles import MilesProducer  # noqa: E402
 from produce_stacks import StacksProducer, closing_text  # noqa: E402
 from producer_daemon import Daemon  # noqa: E402
 from producers import Context  # noqa: E402
@@ -386,6 +387,20 @@ class StacksProducerTests(unittest.TestCase):
             self.assertFalse((talk / f"{name}.flac").exists())
         self.assertTrue((talk / "005.flac").exists())  # Steve's talk still renders
 
+    def test_slow_segments_go_a_few_per_cycle_and_the_talk_never_waits(self):
+        self.ctx.services["music"] = lambda caption, out, seconds: False  # the engine is down
+        plan = produced_plan(self.library)
+        self.write_plan(plan)
+        producer = StacksProducer(self.ctx)
+        producer.per_call = 1
+        now = datetime(2026, 11, 19, 9, 0, tzinfo=ET)
+        (first,) = producer.produce_due(now)
+        talk = self.ctx.buffer_dir / "talk" / plan["plan_id"]
+        self.assertEqual(sorted(p.name for p in talk.glob("*.flac")),
+                         ["000.flac", "001.flac", "005.flac", "007.flac", "009.flac"])  # every line of Steve's
+        self.assertEqual(first.status, "partial")
+        self.assertEqual(sum("music engine" in p or "failed" in p for p in first.problems), 1)  # one try per cycle
+
     def test_the_daemon_pulls_recordings_and_fills_locked_slots(self):
         plan = produced_plan(self.library)
         plan["entries"][6]["source"]["library_rel"] = "air/stacks/elsewhere.flac"
@@ -408,7 +423,8 @@ class StacksProducerTests(unittest.TestCase):
         status = self.ctx.buffer_dir / "plans" / "_status.json"
         status.write_text(json.dumps({"unlocked": {"the_stacks": True}}))
         daemon = Daemon(self.ctx, sync)
-        with patch.object(produce_monster_mix.MonsterMixProducer, "lead_hours", 0.0):
+        with patch.object(produce_monster_mix.MonsterMixProducer, "lead_hours", 0.0), \
+                patch.object(MilesProducer, "lead_hours", 0.0):  # not what this test is about
             results = daemon.cycle(datetime(2026, 11, 19, 9, 0))
         self.assertEqual(sync.media, [(["air/stacks/elsewhere.flac"], self.library)])
         self.assertIn(plan["plan_id"], [r.slot for r in results])

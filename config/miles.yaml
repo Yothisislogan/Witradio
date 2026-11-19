@@ -1,0 +1,42 @@
+# Miles with Logan: routes for Route of the Day, and the Miles Club.
+#
+# Route of the Day narration is written only from each route's facts, so
+# Logan never invents a landmark. Add what you know from walking it: one fact
+# per line, distances and landmarks in the order you meet them. A route with
+# no facts still airs; Logan just names it and the place. A recorded
+# narration, routes/<id>.wav in WRIT_MILES_CUES, plays instead of the
+# written one.
+
+routes:
+  elizabeth_river_trail:
+    name: "the Elizabeth River Trail"
+    place: "Norfolk, Virginia"
+    music: "breezy coastal funk, bright guitars, salt air"
+    facts: []
+  french_broad_marshall:
+    name: "the French Broad River at Marshall"
+    place: "Marshall, North Carolina"
+    music: "Appalachian folk-funk, banjo and fiddle over a steady groove"
+    facts: []
+  las_vegas_strip_sunrise:
+    name: "the Las Vegas Strip at sunrise"
+    place: "Las Vegas, Nevada"
+    music: "neon synth-pop, glittering arpeggios, sunrise glow"
+    facts: []
+
+# The Miles Club: listeners log miles on the website (POST /miles-club on the
+# station API, web/miles-club.html). Logan reads the week's approved names and
+# the station's running total. Milestones turn the total into a trip: "WIT-FM
+# has now walked to Las Vegas". Give each one its distance in miles from home,
+# road or straight-line, as you'd like Logan to say it.
+miles_club:
+  shout_outs: 6  # names per reading, at most
+  milestones: []
+  # - {name: "Marshall, North Carolina", miles: 0}
+  # - {name: "Las Vegas", miles: 0}
+
+# Music generation.
+music:
+  new_tracks_per_session: 4  # beyond this, sessions reuse and re-stretch cached tracks
+  track_seconds: 210  # length asked of the engine for each track
+  rest_days: 3  # a cached track waits this long before it airs again

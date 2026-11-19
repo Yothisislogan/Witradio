@@ -28,6 +28,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import json  # noqa: E402
 import tempfile  # noqa: E402
+from datetime import datetime, timezone  # noqa: E402
 from typing import Any  # noqa: E402
 
 import audio_tools as at  # noqa: E402
@@ -37,6 +38,7 @@ from producers import Result, single  # noqa: E402
 from script_writer import Segment  # noqa: E402
 from stacks_planner import BED_STYLES, SPEECH_LONGEST  # noqa: E402
 
+BEAT_ROLES = {"remix", "speech_sample", "then_now"}  # the slow ones: they wait on the music engine
 STEVE_NAMES = ["Stacks", "Library of Congress", "Steve", "WIT-FM", "Citizen DJ", "National Jukebox", "Pull One",
                "Call Number", "Then", "Now"]
 BRIEFS = {
@@ -84,6 +86,7 @@ class StacksProducer(ClassicalLinks):
     program = "stacks"
     plan_program = "stacks"
     lead_hours = 36.0
+    per_call = 4  # remixes, speech samples and Then & Now tracks per daemon cycle
 
     def media(self, source: dict[str, Any]) -> Path | None:
         """The Halo's copy of a planned recording, by its library-relative path, or the path itself."""
@@ -239,7 +242,13 @@ class StacksProducer(ClassicalLinks):
         if script.exists():
             script.replace(out.with_suffix(".script.json"))
 
-    def produce_plan(self, plan: dict[str, Any]) -> Result:
+    def produce_due(self, now=None) -> list[Result]:
+        """Due plans, soonest first. Steve's talk all renders; the slow segments (remixes, speech
+        samples, Then & Now) go a few per call, so a cycle never waits long on the music engine."""
+        budget = [self.per_call]
+        return [self.produce_plan(plan, budget) for plan in self.plans_due(now or datetime.now(timezone.utc))]
+
+    def produce_plan(self, plan: dict[str, Any], budget: list[int] | None = None) -> Result:
         result = Result(show_id=plan.get("show_id", ""), slot=plan["plan_id"], status="done")
         for index, entry in enumerate(plan["entries"]):
             if entry.get("type") != "talk":
@@ -247,6 +256,11 @@ class StacksProducer(ClassicalLinks):
             final = self.link_path(plan["plan_id"], index)
             if final.exists():
                 continue
+            if budget is not None and entry.get("role") in BEAT_ROLES:
+                if budget[0] <= 0:
+                    result.status = "partial"  # the daemon comes back for it next cycle; the talk goes on
+                    continue
+                budget[0] -= 1
             final.parent.mkdir(parents=True, exist_ok=True)
             hidden = final.with_name(f".{final.stem}.partial.flac")
             meta, problems = self.render_entry(plan, index, hidden)

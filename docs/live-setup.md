@@ -583,7 +583,13 @@ due, and pushes the audio:
 | Ying & Yang | 2 h ahead | Fails closed; logs a prediction, grades it from the scores, reads the Receipts |
 | Monster Mix | 12 h ahead | The Drift plus Wit's breaks; also fills classical slots that haven't unlocked; at most `WRIT_MONSTER_MIX_TRACKS_PER_HOUR` new tracks (default 8) |
 | The Stacks | 36 h ahead, from the server's plans | Steve's talk, the remixes, speech samples and Then & Now (section 7.6) |
-| Miles, Office Hours, Bedtime Stories | Not built yet | Their slots play the safe library |
+| Miles with Logan | 20 h ahead, one session per cycle | Tempo-locked sessions with Logan's cues (section 7.7) |
+| Office Hours, Bedtime Stories | Not built yet | Their slots play the safe library |
+
+Shows made close to air (The Market, Ying & Yang) run first in every
+cycle, so a long Miles or Stacks render never holds up The Tape. The Stacks
+renders all of Steve's talk each cycle but at most four remixes, speech
+samples or Then & Now tracks.
 
 To hear a show without touching the buffer, rehearse one airing. It lands
 in `runtime/rehearsal/`:
@@ -697,6 +703,80 @@ The Stacks unlocks once the catalog holds 15 approved records
 (`unlock_records` in `config/wit_next_schedule.yaml`). Until then its slots
 run Monster Mix. To stage it on `/next` sooner, start the playout with
 `WRIT_FORCE_STACKS=1`.
+
+### 7.7 Miles with Logan
+
+Every Miles airing is one continuous, beatmatched mix, cut into gapless
+files of about five minutes in the show's slot folder. The producer picks
+sessions from the show's menu (`sessions` in `config/wit_next_schedule.yaml`),
+a different one leading each day; Easy Miles covers any time left over:
+
+| Session | Shape |
+|---|---|
+| Walk It Out (45 min) | Steady 115-125 BPM, one 5-minute power walk at 130, a Strength Minute |
+| Intervals (30 min) | 5 min warm-up at 105; 7 rounds of 2 min at 160 and 1 min at 120; 4 min cool-down |
+| Pyramid (40 min) | 115 up to 170 over 20 min, 5 min at 170, back down over 15 |
+| Route of the Day (45 min) | A walk at 112-122 BPM, music themed to the route, Logan narrating it |
+| Long Slow Saturday (90 min) | Steady 150-160 BPM, a time call every 15 minutes, little talk |
+| Recovery Sunday (30 min) | An easy walk at 110, then a 10-minute stretch over an ambient bed |
+
+A bell rings 10 seconds before every interval change, "Pick it up in
+three... two... one." lands on each speed-up, and there's a time call every
+5 minutes and a halfway call. Every session opens with "Headphones low, eyes
+up, and listen to your body."
+
+**The tempo gate.** Each track is asked of ACE-Step at the block's BPM, then
+measured, time-stretched onto the target with the pitch kept, and measured
+again (`mac/tempo_lock.py`). Anything that can't hold within 2 BPM is thrown
+away. After mixing, every block is measured once more in the finished files.
+Check recent sessions:
+
+```bash
+python3 mac/produce_miles.py report
+```
+
+ffmpeg built with librubberband stretches more cleanly than its own atempo;
+the producer uses it when it's there. Locked tracks are cached by tempo and
+reused after three days of rest. Each session makes at most four new tracks
+once the cache can cover the rest (`config/miles.yaml`).
+
+**Logan's voice.** The cue library is in `config/miles_cues.yaml`: about a
+hundred short lines (counts, interval calls, time checks, encouragement).
+Record each as `<id>.wav` in `WRIT_MILES_CUES` (default
+`~/.writ/voices/logan_cues/`). Until a line is recorded, it's spoken in
+Logan's cloned voice. See what's done:
+
+```bash
+python3 mac/produce_miles.py cues
+```
+
+The weekly intro goes in `weekly/<year>-W<week>.wav` (for example
+`weekly/2026-W48.wav`) and opens each airing that week. Without it, the open
+is written from the day's facts. Route of the Day narration is written only
+from the facts in `config/miles.yaml`, which start empty: add what you know
+from walking each route, or record `routes/<route>.wav`.
+
+**The Miles Club.** Listeners log miles at `web/miles-club.html`, which posts
+to the station API (`POST /miles-club`). It keeps a first name or nickname,
+a city and the miles; no email, no IP address. Each entry waits for review,
+and approving rewrites `buffer/plans/_miles_club.json`, which the Halo pulls
+with the plans:
+
+```bash
+python3 mac/miles_club.py pending
+```
+
+```bash
+python3 mac/miles_club.py approve 12 13
+```
+
+Logan reads the week's approved names and the station total in the last
+session of each airing. Add milestones to `config/miles.yaml` to have him
+say "WIT-FM has now walked to Las Vegas". Before the form goes live:
+publish a privacy policy at the link the form shows (`/privacy`), and set
+`MILES_CLUB_URL` in the form to the station API's address. The form asks
+every listener to confirm they're 13 or older, and Bedtime Stories never
+invites entries.
 
 ## 8. Decisions due by the end of Phase 0
 

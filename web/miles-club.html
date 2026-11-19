@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Miles Club</title>
+<style>
+:root { --bg: #071018; --card: #101c28; --accent: #00AEEF; --text: #ffffff; --muted: #a9b8c6; --bad: #ff8a80; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font-family: Arial, Helvetica, sans-serif; padding: 24px 16px; }
+.card { max-width: 560px; margin: 0 auto; background: var(--card); padding: 24px; border-radius: 18px; border: 2px solid var(--accent); }
+h1 { margin: 0 0 4px; font-size: 1.6rem; }
+p { color: var(--muted); line-height: 1.45; }
+label { display: block; margin-top: 16px; font-weight: 700; }
+input[type=text], input[type=number] { width: 100%; padding: 12px; margin-top: 6px; border-radius: 10px; border: none; font-size: 1rem; }
+.check { display: flex; gap: 10px; align-items: flex-start; margin-top: 18px; font-weight: 400; }
+.check input { margin-top: 3px; width: 20px; height: 20px; }
+button { margin-top: 20px; background: var(--accent); color: #fff; padding: 14px 20px; border: none; border-radius: 10px; font-weight: 700; font-size: 1rem; cursor: pointer; width: 100%; }
+button:disabled { opacity: 0.6; cursor: default; }
+#result { margin-top: 14px; min-height: 1.4em; }
+#result.bad { color: var(--bad); }
+.small { font-size: 0.85rem; }
+</style>
+</head>
+<body>
+<main class="card">
+  <h1>Miles Club</h1>
+  <p>Walked or ran with Miles with Logan? Log your miles. Logan reads the week's names on air and keeps the station's running total.</p>
+
+  <form id="club" novalidate>
+    <label for="name">First name or nickname</label>
+    <input id="name" name="name" type="text" maxlength="30" autocomplete="given-name" required>
+
+    <label for="city">City (optional)</label>
+    <input id="city" name="city" type="text" maxlength="40" autocomplete="address-level2">
+
+    <label for="miles">Miles</label>
+    <input id="miles" name="miles" type="number" min="0.1" max="100" step="0.1" inputmode="decimal" required>
+
+    <label class="check" for="age">
+      <input id="age" name="age_13_plus" type="checkbox" required>
+      <span>I'm 13 or older.</span>
+    </label>
+
+    <button type="submit" id="send">Log my miles</button>
+    <div id="result" role="status" aria-live="polite"></div>
+  </form>
+
+  <p class="small">We keep only your first name or nickname, your city and your miles, to read on air and add to the
+  station total. No email, no address. A person reviews every entry before a name goes on air.
+  See our <a href="/privacy" style="color: var(--accent)">privacy policy</a>.</p>
+</main>
+<script>
+  // The station API's Miles Club endpoint (mac/api_server.py). Point this at your server,
+  // e.g. "https://radio.example.com/wit-next/miles-club" behind a reverse proxy.
+  const MILES_CLUB_URL = "/wit-next/miles-club";
+
+  const form = document.getElementById("club");
+  const result = document.getElementById("result");
+  const send = document.getElementById("send");
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    result.className = "";
+    const fields = form.elements;  // form.name would be the form's own name, not the field
+    const entry = {
+      name: fields["name"].value.trim(),
+      city: fields["city"].value.trim(),
+      miles: parseFloat(fields["miles"].value),
+      age_13_plus: fields["age_13_plus"].checked,
+    };
+    if (!entry.age_13_plus) {
+      result.className = "bad";
+      result.textContent = "The Miles Club is for listeners 13 and older.";
+      return;
+    }
+    send.disabled = true;
+    try {
+      const response = await fetch(MILES_CLUB_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(entry),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        result.className = "bad";
+        result.textContent = data.error || "That didn't go through. Try again in a bit.";
+      } else {
+        result.textContent = data.note || "Thanks! Your miles are logged.";
+        form.reset();
+      }
+    } catch (err) {
+      result.className = "bad";
+      result.textContent = "Couldn't reach the station. Try again in a bit.";
+    } finally {
+      send.disabled = false;
+    }
+  });
+</script>
+</body>
+</html>

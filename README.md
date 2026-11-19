@@ -275,6 +275,9 @@ The listener daemon polls for new messages every 30 seconds and generates spoken
 ├── config/pronunciations.yaml  # Respellings for the voices (composers first)
 ├── config/feeds.yaml           # Data providers and whether each is cleared for air
 ├── config/prompts/             # House rules and host briefs for the script model
+├── config/miles.yaml           # Miles with Logan: routes, Miles Club milestones, music budget
+├── config/miles_cues.yaml      # Logan's cue library: the lines to record once
+├── web/miles-club.html         # The Miles Club form (13+, reviewed before air)
 ├── mac/
 │   ├── station_config.py        # Station config resolver and env exporter
 │   ├── playout_director.py     # wit-next: decides each item for Liquidsoap
@@ -295,6 +298,10 @@ The listener daemon polls for new messages every 30 seconds and generates spoken
 │   ├── produce_monster_mix.py  # Monster Mix: drifting music and Wit's breaks
 │   ├── produce_stacks.py       # The Stacks: Steve, remixes, speech samples, Then & Now
 │   ├── remix.py                # Tempo and key, beds, stretch, layer and duck
+│   ├── produce_miles.py        # Miles with Logan: tempo-locked sessions as one mix
+│   ├── miles_sessions.py       # The session menu, cue timing and airing fill
+│   ├── tempo_lock.py           # Exact tempo: measure, stretch, check within 2 BPM
+│   ├── miles_club.py           # Miles Club entries, review and the weekly summary
 │   ├── drift.py                # The Drift: one change per track
 │   ├── script_writer.py        # Host brief + facts -> JSON voice script
 │   ├── fact_check.py           # Every number and name must be in the facts

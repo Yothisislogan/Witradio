@@ -73,7 +73,10 @@ STATION_PROXY_ENDPOINTS = {
     "diary",
     "discogs",
     "qr",
+    "miles-club",
 }
+MILES_CLUB_PER_DAY = 5  # entries per IP address per day (the address itself is never stored)
+miles_club_times: dict[str, list[float]] = {}
 
 # Shared state — set by start_api_thread()
 _track_info: dict = {}
@@ -194,6 +197,8 @@ class NowPlayingHandler(http.server.BaseHTTPRequestHandler):
                 return
             if method == "POST" and path == "/message":
                 return self._handle_message_body(body or b"")
+            if method == "POST" and path == "/miles-club":
+                return self._handle_miles_club_body(body or b"")
             return self._send_error(404, "Unknown endpoint")
 
         target = f"http://127.0.0.1:{station.stream.api_port}{path}"
@@ -253,7 +258,7 @@ class NowPlayingHandler(http.server.BaseHTTPRequestHandler):
         station_route = parse_station_route(path)
         if station_route:
             station_id, station_path = station_route
-            if station_path != "/message":
+            if station_path not in ("/message", "/miles-club"):
                 self.send_response(404)
                 self.end_headers()
                 return
@@ -268,13 +273,42 @@ class NowPlayingHandler(http.server.BaseHTTPRequestHandler):
                 content_type=self.headers.get("Content-Type"),
             )
 
-        if path != "/message":
+        if path not in ("/message", "/miles-club"):
             self.send_response(404)
             self.end_headers()
             return
 
         content_length = int(self.headers.get('Content-Length', 0))
-        self._handle_message_body(self.rfile.read(content_length))
+        body = self.rfile.read(min(content_length, 4096))
+        if path == "/miles-club":
+            return self._handle_miles_club_body(body)
+        self._handle_message_body(body)
+
+    def _handle_miles_club_body(self, body: bytes):
+        """A Miles Club entry from web/miles-club.html. It waits for review before air."""
+        from miles_club import ClubError, MilesClub, club_path
+
+        client_ip = self.client_address[0]
+        now = time.time()
+        recent = [t for t in miles_club_times.get(client_ip, []) if now - t < 86400]
+        if len(recent) >= MILES_CLUB_PER_DAY:
+            return self._send_error(429, "That's plenty of miles for one day. Try again tomorrow.")
+        try:
+            data = json.loads(body.decode("utf-8"))
+            if not isinstance(data, dict):
+                raise ValueError
+        except (UnicodeDecodeError, ValueError):
+            return self._send_error(400, "Invalid entry")
+        try:
+            with MilesClub(club_path(STATION)) as club:
+                club.submit(data)
+        except ClubError as exc:
+            return self._send_error(400, str(exc))
+        except Exception:
+            return self._send_error(500, "Internal server error")
+        miles_club_times[client_ip] = recent + [now]
+        self._send_json({"status": "received",
+                         "note": "Thanks! Logan reads approved names on Miles with Logan."})
 
     def _handle_message_body(self, body: bytes):
         client_ip = self.client_address[0]

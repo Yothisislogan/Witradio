@@ -8,12 +8,14 @@ Each cycle:
    tracks (pulling the library recordings those re-cut first);
 3. for each upcoming airing whose lead time has come, run its producer:
    The Market (2 hours ahead, The Tape 20 minutes), Ying & Yang (2 hours),
-   Monster Mix (12 hours), and Monster Mix for classical and Stacks slots
-   that haven't unlocked yet;
+   Monster Mix (12 hours), Miles with Logan (20 hours, one session per
+   cycle), and Monster Mix for classical and Stacks slots that haven't
+   unlocked yet. The shows with the shortest lead go first, so a long Miles
+   render never holds up The Tape;
 4. push the finished audio to the server.
 
-Shows without a producer yet (Miles, Office Hours, Bedtime Stories) are
-skipped; their slots fall back to the safe library.
+Shows without a producer yet (Office Hours, Bedtime Stories) are skipped;
+their slots fall back to the safe library.
 
     python3 mac/producer_daemon.py once
     python3 mac/producer_daemon.py loop --interval 300
@@ -37,12 +39,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from buffer_sync import Sync, SyncError  # noqa: E402
 from produce_classical import ClassicalLinks  # noqa: E402
 from produce_market import MarketProducer  # noqa: E402
+from produce_miles import MilesProducer  # noqa: E402
 from produce_monster_mix import MonsterMixProducer  # noqa: E402
 from produce_stacks import StacksProducer  # noqa: E402
 from produce_ying_yang import YingYangProducer  # noqa: E402
 from producers import Airing, Context, Result, upcoming_airings  # noqa: E402
 
-PRODUCERS = {"market": MarketProducer, "ying_yang": YingYangProducer, "monster_mix": MonsterMixProducer}
+PRODUCERS = {"market": MarketProducer, "ying_yang": YingYangProducer, "monster_mix": MonsterMixProducer,
+             "miles": MilesProducer}
 PLANNED = {"classical": ClassicalLinks, "stacks": StacksProducer}  # the server plans these; the Halo renders talk
 
 
@@ -72,6 +76,8 @@ class Daemon:
                            host=show.host), show.program
         return (airing, airing.program) if airing.program in self.producers else None
 
+    URGENT_HOURS = 2.0  # shows made this close to air run before everything else in a cycle
+
     def cycle(self, now: datetime | None = None) -> list[Result]:
         now = self.ctx.schedule.to_wall(now) if now else self.ctx.schedule.now()
         results: list[Result] = []
@@ -80,7 +86,43 @@ class Daemon:
                 self.sync.pull()
             except SyncError as exc:
                 self.ctx.log(f"pull failed: {exc}")
-        aware = self.ctx.schedule.localize(now)
+        horizon = max(p.lead_hours for p in self.producers.values())
+        due = []
+        for airing in upcoming_airings(self.ctx.schedule, now, horizon):
+            resolved = self.resolve(airing)
+            if resolved is None or airing.end <= now:
+                continue
+            target, program = resolved
+            producer = self.producers[program]
+            if target.start - now <= timedelta(hours=producer.lead_hours):
+                due.append((producer.lead_hours, target.start, target, producer))
+        due.sort(key=lambda d: (d[0], d[1]))  # shortest lead first
+        results += self._run([d for d in due if d[0] <= self.URGENT_HOURS], now)
+        results += self._planned(self.ctx.schedule.localize(now))
+        results += self._run([d for d in due if d[0] > self.URGENT_HOURS], now)
+        if self.sync:
+            try:
+                self.sync.push()
+            except SyncError as exc:
+                self.ctx.log(f"push failed: {exc}")
+        return results
+
+    def _run(self, due, now: datetime) -> list[Result]:
+        results = []
+        for _, _, target, producer in due:
+            try:
+                result = producer.produce(target, now)
+            except Exception as exc:
+                result = Result(target.show_id, target.slot, "failed", problems=[repr(exc)])
+            if result.segments or result.status not in ("done",):
+                self.ctx.log(f"{target.show_id} {target.slot}: {result.status} "
+                             f"{len(result.segments)} new" + (f"; {result.problems[0]}" if result.problems else ""))
+            results.append(result)
+        return results
+
+    def _planned(self, aware: datetime) -> list[Result]:
+        """The talk for the server's plans: the Count's links, and The Stacks (its recordings first)."""
+        results = []
         stacks = self.planned["stacks"]
         missing = stacks.media_needed(aware) if self.ctx.library_dir is not None else []
         if missing and self.sync:
@@ -97,28 +139,6 @@ class Daemon:
                     results.append(result)
             except Exception as exc:  # one bad plan shouldn't stop the other shows
                 self.ctx.log(f"{name} plans failed: {exc!r}")
-        horizon = max(p.lead_hours for p in self.producers.values())
-        for airing in upcoming_airings(self.ctx.schedule, now, horizon):
-            resolved = self.resolve(airing)
-            if resolved is None or airing.end <= now:
-                continue
-            target, program = resolved
-            producer = self.producers[program]
-            if target.start - now > timedelta(hours=producer.lead_hours):
-                continue
-            try:
-                result = producer.produce(target, now)
-            except Exception as exc:
-                result = Result(target.show_id, target.slot, "failed", problems=[repr(exc)])
-            if result.segments or result.status not in ("done",):
-                self.ctx.log(f"{target.show_id} {target.slot}: {result.status} "
-                             f"{len(result.segments)} new" + (f"; {result.problems[0]}" if result.problems else ""))
-            results.append(result)
-        if self.sync:
-            try:
-                self.sync.push()
-            except SyncError as exc:
-                self.ctx.log(f"push failed: {exc}")
         return results
 
 
@@ -154,7 +174,13 @@ def main(argv: Sequence[str] | None = None) -> int:
                 if resolved is None or resolved[1] not in daemon.producers:
                     print(f"{args.show_id} has no producer on the Halo yet")
                     return 1
-                result = daemon.producers[resolved[1]].produce(resolved[0], at - timedelta(minutes=10))
+                producer = daemon.producers[resolved[1]]
+                result = producer.produce(resolved[0], at - timedelta(minutes=10))
+                while result.status == "partial" and result.segments:  # Miles makes one session per call
+                    more = producer.produce(resolved[0], at - timedelta(minutes=10))
+                    result.segments += more.segments
+                    result.problems += more.problems
+                    result.status = more.status
                 print(f"{result.status}: {', '.join(result.segments) or 'nothing new'} -> {result.folder}")
                 for problem in result.problems:
                     print(f"  {problem}")

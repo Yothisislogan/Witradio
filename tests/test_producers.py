@@ -25,6 +25,7 @@ from feeds import FactSheet, Source  # noqa: E402
 from llm_client import LLMClient  # noqa: E402
 from produce_classical import ClassicalLinks  # noqa: E402
 from produce_market import DISCLAIMER, MarketProducer  # noqa: E402
+from produce_miles import MilesProducer  # noqa: E402
 from produce_ying_yang import YingYangProducer  # noqa: E402
 from producer_daemon import Daemon  # noqa: E402
 from producers import Context, upcoming_airings  # noqa: E402
@@ -96,7 +97,7 @@ def voices_config(root: Path) -> Path:
     tone.write_text("import subprocess, sys\nsubprocess.run(['ffmpeg', '-y', '-v', 'error', '-f', 'lavfi', '-i', "
                     "'sine=frequency=330:duration=0.4', '-ac', '2', sys.argv[1]], check=True)\n")
     cards = "\n".join(f"  {host}: {{engine: tone, voice: {host}, words_per_second: 2.5}}"
-                      for host in ("count", "dottie", "ying", "yang", "wit", "steve"))
+                      for host in ("count", "dottie", "ying", "yang", "wit", "steve", "logan"))
     path = root / "voices.yaml"
     path.write_text(f"engines:\n  tone: {{transport: command, style: plain, command: \"{sys.executable} {tone} {{out}}\"}}\n"
                     f"voices:\n{cards}\n")
@@ -276,7 +277,8 @@ class ProducerTests(unittest.TestCase):
         daemon = Daemon(self.ctx)
         (self.ctx.buffer_dir / "plans").mkdir(parents=True)
         (self.ctx.buffer_dir / "plans" / "_status.json").write_text(json.dumps({"unlocked": {"evening_concert": False}}))
-        with patch.object(produce_monster_mix.MonsterMixProducer, "lead_hours", 3.0):
+        with patch.object(produce_monster_mix.MonsterMixProducer, "lead_hours", 3.0), \
+                patch.object(MilesProducer, "lead_hours", 0.0):
             results = daemon.cycle(datetime(2026, 11, 18, 18, 30))
         made = {(r.show_id, r.slot) for r in results if r.segments}
         self.assertIn(("monster_mix", "2026-11-18_2000"), made)  # Evening Concert's slot, locked
